@@ -687,6 +687,7 @@
 
             try {
                 if (isEditMode) {
+                    // --- 編輯模式 ---
                     const userDocId = userId;
                     const photoFile = form.querySelector('#photo').files[0];
                     if (photoFile) {
@@ -698,13 +699,13 @@
                     alert('員工資料已更新。');
 
                 } else {
+                    // --- 新增模式 ---
                     const email = form.querySelector('#email').value;
                     const password = form.querySelector('#password').value;
                     const username = form.querySelector('#username').value;
                     
                     if (!password || !email || !username) {
-                        alert('新增員工時，登入帳號、Email 和密碼為必填項。');
-                        throw new Error("Missing required fields");
+                        throw new Error("新增員工時，登入帳號、Email 和密碼為必填項。");
                     }
                     
                     // 檢查帳號和 Email 是否重複
@@ -731,6 +732,13 @@
                     try {
                         const userCredential = await createUserWithEmailAndPassword(tempAuth, email, password);
                         newUid = userCredential.user.uid;
+                    } catch(authError) {
+                        if (authError.code === 'auth/weak-password') {
+                             throw new Error('密碼強度不足，至少需要 6 個字元。');
+                        } else if (authError.code === 'auth/email-already-in-use') {
+                            throw new Error('此 Email 已被註冊，請更換一個。');
+                        }
+                        throw new Error('建立登入權限時發生未知錯誤。');
                     } finally {
                         await deleteApp(tempApp);
                     }
