@@ -4,508 +4,279 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>西北保全勤務管理系統</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- React & Babel for JSX -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide-react@0.292.0/dist/lucide-react.js"></script>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+        window.firebase = {
+            initializeApp,
+            getAuth,
+            onAuthStateChanged,
+            signInWithEmailAndPassword,
+            signOut,
+            getFirestore,
+            doc,
+            getDoc
+        };
+    </script>
     <style>
         body {
-            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            font-family: 'Inter', sans-serif;
         }
-        .modal {
-            transition: opacity 0.3s ease;
-        }
-        .modal-content {
-            transition: transform 0.3s ease;
-        }
-        /* For loading spinner */
-        .loader {
-            border-top-color: #3498db;
+        .animate-spin {
             animation: spin 1s linear infinite;
         }
         @keyframes spin {
+            from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800">
+<body class="bg-gray-100">
+    <div id="root"></div>
 
-    <!-- Loading Screen -->
-    <div id="loading-screen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
-        <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mb-4"></div>
-        <h2 class="text-xl font-semibold text-gray-700">系統載入中...</h2>
-        <p class="text-gray-500">正在連接至 Firebase 服務</p>
-    </div>
+    <script type="text/babel">
+        function startApp() {
+            const { useState, useEffect, useMemo } = React;
+            const { initializeApp: initializeFirebaseApp } = window.firebase;
+            const { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } = window.firebase;
+            const { getFirestore, doc, getDoc } = window.firebase;
+            const { Home, ShieldCheck, CalendarClock, MapPin, Award, UserPlus, FileText, Settings, LogOut, Briefcase, AlertTriangle } = window.lucide;
 
-    <!-- Login Screen -->
-    <div id="login-screen" class="hidden min-h-screen flex items-center justify-center bg-gray-50">
-        <div class="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
-            <h2 class="text-3xl font-bold text-center text-gray-800 mb-2">西北保全勤務管理系統</h2>
-            <p class="text-center text-gray-500 mb-8">請登入以繼續</p>
-            
-            <!-- Placeholder for login form. We will use anonymous/custom token auth -->
-            <div class="text-center">
-                <p id="auth-status" class="text-lg text-blue-600">正在進行身分驗證...</p>
-                <p class="text-sm text-gray-500 mt-4">系統將自動為您登入。如果長時間沒有回應，請重新整理頁面。</p>
-            </div>
-        </div>
-    </div>
+            // --- 1. Firebase 設定 ---
+            const firebaseConfig = {
+              apiKey: "AIzaSyAUWD4qFvV88umGvzyozFuyo7WhT6QidsU",
+              authDomain: "nwcom-security-system.firebaseapp.com",
+              projectId: "nwcom-security-system",
+              storageBucket: "nwcom-security-system.firebasestorage.app",
+              messagingSenderId: "439911862368",
+              appId: "1:439911862368:web:64dd8bf7a8e44d81687305",
+              measurementId: "G-H8GLDCW27X"
+            };
 
-    <!-- Main App Screen -->
-    <div id="app-screen" class="hidden">
-        <header class="bg-white shadow-md">
-            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-                <h1 class="text-2xl font-bold text-gray-900">西北保全勤務管理系統</h1>
-                <div class="flex items-center space-x-4">
-                    <div class="text-right">
-                        <p id="user-role" class="text-sm font-semibold text-indigo-600"></p>
-                        <p id="user-id" class="text-xs text-gray-500"></p>
-                    </div>
-                     <button id="logout-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition">登出</button>
-                </div>
-            </div>
-        </header>
-
-        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-            <!-- Manager View -->
-            <div id="manager-view" class="hidden">
-                <div class="px-4 py-6 sm:p-6 bg-white rounded-xl shadow">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-semibold">管理員儀表板</h2>
-                         <button id="add-event-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition shadow-sm">登錄獎懲事件</button>
-                    </div>
-                    <div class="mb-6">
-                        <label for="community-select" class="block text-sm font-medium text-gray-700">選擇管理的社區</label>
-                        <select id="community-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-medium mb-2" id="employee-list-title">社區員工列表</h3>
-                        <div id="employee-list" class="space-y-3">
-                            <!-- Employee cards will be inserted here -->
+            // --- 設定檢查元件 ---
+            function ConfigError() {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-red-50">
+                        <div className="max-w-2xl w-full bg-white p-8 rounded-lg shadow-lg border-2 border-red-200 text-center">
+                            <AlertTriangle className="mx-auto h-16 w-16 text-red-500" />
+                            <h1 className="mt-4 text-3xl font-bold text-gray-900">系統設定錯誤</h1>
+                            <p className="mt-4 text-gray-600">
+                                系統偵測到您尚未設定 Firebase。請打開 <code>index.html</code> 檔案，找到 <code>firebaseConfig</code> 物件，並將其內容替換為您自己的 Firebase 專案設定。
+                            </p>
                         </div>
                     </div>
-                </div>
-            </div>
+                );
+            }
 
-            <!-- Employee View -->
-            <div id="employee-view" class="hidden">
-                <div class="px-4 py-6 sm:p-6 bg-white rounded-xl shadow">
-                    <h2 class="text-xl font-semibold mb-4">我的儀表板</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-indigo-50 p-6 rounded-lg text-center">
-                            <h3 class="text-lg font-medium text-indigo-800">目前考核總分</h3>
-                            <p id="employee-score" class="text-5xl font-bold text-indigo-600 mt-2">--</p>
-                        </div>
-                        <div class="bg-green-50 p-6 rounded-lg text-center">
-                             <h3 class="text-lg font-medium text-green-800">本月獎勵次數</h3>
-                             <p id="employee-rewards-count" class="text-5xl font-bold text-green-600 mt-2">--</p>
-                        </div>
-                         <div class="bg-red-50 p-6 rounded-lg text-center">
-                             <h3 class="text-lg font-medium text-red-800">本月懲處次數</h3>
-                             <p id="employee-penalties-count" class="text-5xl font-bold text-red-600 mt-2">--</p>
-                        </div>
-                    </div>
-                    <div class="mt-8">
-                        <h3 class="text-lg font-medium mb-2">近期獎懲記錄</h3>
-                        <div id="employee-events" class="space-y-2 max-h-96 overflow-y-auto pr-2">
-                             <!-- Employee event items will be inserted here -->
-                        </div>
-                    </div>
-                </div>
-            </div>
+            if (firebaseConfig.apiKey === "YOUR_API_KEY" || !firebaseConfig.apiKey) {
+                ReactDOM.render(<ConfigError />, document.getElementById('root'));
+                return;
+            }
 
-            <!-- Admin View -->
-            <div id="admin-view" class="hidden">
-                 <div class="px-4 py-6 sm:p-6 bg-white rounded-xl shadow">
-                    <h2 class="text-xl font-semibold mb-4">系統管理員面板</h2>
-                    <p class="text-gray-600">此處為系統管理功能區，例如：帳號管理、社區設定、獎懲項目設定等。</p>
-                    <p class="text-gray-500 mt-2 text-sm">(此為原型展示，後台功能需在Web管理介面完整開發)</p>
-                </div>
-            </div>
+            // 初始化 Firebase
+            const app = initializeFirebaseApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
 
-        </main>
-    </div>
-    
-    <!-- Add Event Modal -->
-    <div id="add-event-modal" class="modal hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-20">
-        <div class="modal-content relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-            <form id="add-event-form">
-                <h3 class="text-xl font-semibold mb-4">登錄獎懲事件</h3>
-                <div class="space-y-4">
-                     <div>
-                        <label for="event-employee-select" class="block text-sm font-medium text-gray-700">選擇員工</label>
-                        <select id="event-employee-select" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
-                    </div>
-                     <div>
-                        <label class="block text-sm font-medium text-gray-700">事件類型</label>
-                        <div class="mt-2 flex space-x-4">
-                            <label class="inline-flex items-center">
-                                <input type="radio" name="event-type" value="reward" class="form-radio text-indigo-600" checked>
-                                <span class="ml-2">獎勵</span>
-                            </label>
-                             <label class="inline-flex items-center">
-                                <input type="radio" name="event-type" value="penalty" class="form-radio text-red-600">
-                                <span class="ml-2">懲處</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div>
-                        <label for="event-description" class="block text-sm font-medium text-gray-700">事由描述</label>
-                        <textarea id="event-description" rows="3" required class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"></textarea>
-                    </div>
-                     <div>
-                        <label for="event-points" class="block text-sm font-medium text-gray-700">分數 (+/-)</label>
-                        <input type="number" id="event-points" required class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
-                    </div>
-                </div>
-                <div class="mt-6 flex justify-end space-x-3">
-                    <button type="button" id="cancel-event-button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition">取消</button>
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">確認送出</button>
-                </div>
-            </form>
-        </div>
-    </div>
+            // --- 2. 應用程式主元件 ---
+            function App() {
+                const [user, setUser] = useState(null);
+                const [loading, setLoading] = useState(true);
+                const [error, setError] = useState('');
 
+                useEffect(() => {
+                    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+                        if (firebaseUser) {
+                            try {
+                                const userDocRef = doc(db, "users", firebaseUser.uid);
+                                const userDocSnap = await getDoc(userDocRef);
+                                if (userDocSnap.exists()) {
+                                    setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...userDocSnap.data() });
+                                    setError(''); // 成功登入後清除錯誤訊息
+                                } else {
+                                    console.error("Firestore Error: User document not found for UID:", firebaseUser.uid);
+                                    setError("登入成功，但找不到您的使用者設定檔。請聯絡管理員確認已在資料庫中建立您的資料。");
+                                    await signOut(auth);
+                                    setUser(null);
+                                }
+                            } catch (e) {
+                                console.error("Error fetching user data:", e);
+                                setError("讀取使用者資料時發生錯誤，請檢查網路連線或聯繫管理員。");
+                                await signOut(auth);
+                                setUser(null);
+                            }
+                        } else {
+                            setUser(null);
+                        }
+                        setLoading(false);
+                    });
+                    return () => unsubscribe();
+                }, []);
 
-    <!-- Firebase SDK -->
-    <script type="module">
-        // Import Firebase modules
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { 
-            getAuth, 
-            onAuthStateChanged, 
-            signInAnonymously,
-            signInWithCustomToken,
-            signOut
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            collection, 
-            doc, 
-            getDoc, 
-            getDocs,
-            addDoc,
-            query, 
-            where,
-            onSnapshot,
-            serverTimestamp,
-            orderBy
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- Firebase Configuration ---
-        // IMPORTANT: Replace with your actual Firebase project configuration.
-        // This is a placeholder configuration.
-        const firebaseConfig = {
-  apiKey: "AIzaSyAOm8X5SH7tglQmjI2cB4oaa-AsLVHEqno",
-  authDomain: "nw20250001.firebaseapp.com",
-  projectId: "nw20250001",
-  storageBucket: "nw20250001.firebasestorage.app",
-  messagingSenderId: "969599926740",
-  appId: "1:969599926740:web:ac0f11e5b9d06ef9911641",
-  measurementId: "G-9CXM110366"
-};
-        
-        // Use environment variables if available (for Canvas environment)
-        const finalFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-        // --- Initialize Firebase ---
-        const app = initializeApp(finalFirebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // --- Global State ---
-        let currentUser = null;
-        let currentUserData = null;
-        let unsubscribeListeners = []; // To store snapshot listeners for cleanup
-
-        // --- UI Elements ---
-        const loadingScreen = document.getElementById('loading-screen');
-        const loginScreen = document.getElementById('login-screen');
-        const appScreen = document.getElementById('app-screen');
-        const authStatus = document.getElementById('auth-status');
-        const logoutButton = document.getElementById('logout-button');
-        
-        const managerView = document.getElementById('manager-view');
-        const employeeView = document.getElementById('employee-view');
-        const adminView = document.getElementById('admin-view');
-
-        const addEventModal = document.getElementById('add-event-modal');
-        const addEventButton = document.getElementById('add-event-button');
-        const cancelEventButton = document.getElementById('cancel-event-button');
-        const addEventForm = document.getElementById('add-event-form');
-        
-        // --- Authentication ---
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                currentUser = user;
-                authStatus.textContent = '登入成功！正在讀取使用者資料...';
-                
-                // Fetch user data from Firestore
-                const userDocRef = doc(db, `users`, user.uid);
-                const userDocSnap = await getDoc(userDocRef);
-
-                if (userDocSnap.exists()) {
-                    currentUserData = userDocSnap.data();
-                    initializeAppUI();
-                    
-                    loginScreen.classList.add('hidden');
-                    appScreen.classList.remove('hidden');
-                } else {
-                    console.error("User document not found in Firestore!");
-                    authStatus.textContent = '錯誤：找不到您的使用者設定檔。';
-                }
-                loadingScreen.classList.add('hidden');
-            } else {
-                currentUser = null;
-                currentUserData = null;
-                cleanupListeners(); // Clean up listeners on logout
-                
-                appScreen.classList.add('hidden');
-                loginScreen.classList.remove('hidden');
-                loadingScreen.classList.add('hidden');
-                
-                // Automatically try to sign in
-                try {
-                    authStatus.textContent = '正在自動登入...';
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
+                const handleLogin = async (email, password) => {
+                    setLoading(true);
+                    setError('');
+                    try {
+                        await signInWithEmailAndPassword(auth, email, password);
+                    } catch (error) {
+                        console.error("Login failed:", error.code);
+                        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                            setError("登入失敗，請檢查您的帳號或密碼。");
+                        } else {
+                            setError("登入時發生未知錯誤，請稍後再試。");
+                        }
                     }
-                } catch (error) {
-                    console.error("Authentication failed: ", error);
-                    authStatus.textContent = `登入失敗: ${error.message}`;
+                    setLoading(false);
+                };
+
+                const handleLogout = async () => {
+                    await signOut(auth);
+                    setUser(null);
+                    // 登出後不清空錯誤，以便保留登入頁面可能需要的錯誤訊息
+                };
+
+                if (loading) {
+                    return (
+                        <div className="flex items-center justify-center h-screen">
+                            <div className="w-16 h-16 border-4 border-blue-500 border-dashed rounded-full animate-spin"></div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div>
+                        {user ? <Dashboard user={user} onLogout={handleLogout} /> : <LoginPage onLogin={handleLogin} error={error} />}
+                    </div>
+                );
+            }
+
+            // --- 3. 登入頁面元件 ---
+            function LoginPage({ onLogin, error }) {
+                const [email, setEmail] = useState('');
+                const [password, setPassword] = useState('');
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    onLogin(email, password);
+                };
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+                        <div className="max-w-md w-full space-y-8">
+                            <div>
+                                <ShieldCheck className="mx-auto h-12 w-auto text-blue-600" />
+                                <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">西北保全勤務管理系統</h2>
+                            </div>
+                            <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+                                <div className="rounded-md shadow-sm -space-y-px">
+                                    <div><input id="email-address" name="email" type="email" required className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" placeholder="電子郵件" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                                    <div><input id="password" name="password" type="password" required className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" placeholder="密碼" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+                                </div>
+                                {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative text-center"><span className="block sm:inline">{error}</span></div>}
+                                <div><button type="submit" className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">登入</button></div>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- 4. 儀表板主元件 ---
+            function Dashboard({ user, onLogout }) {
+                const [currentPage, setCurrentPage] = useState('home');
+                const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+                const roleName = useMemo(() => {
+                    const roles = {'Admin': '系統管理員', 'Manager': '高階管理者', 'Junior Manager': '初階管理者', 'Employee': '員工'};
+                    return roles[user.role] || '未知角色';
+                }, [user.role]);
+
+                const navItems = useMemo(() => {
+                    const allItems = {
+                        'home': { label: '儀表板首頁', icon: Home, roles: ['Admin', 'Manager', 'Junior Manager', 'Employee'] },
+                        'schedule': { label: '勤務排班', icon: CalendarClock, roles: ['Admin', 'Manager', 'Junior Manager', 'Employee'] },
+                        'clockIn': { label: 'GPS打卡', icon: MapPin, roles: ['Employee'] },
+                        'records': { label: '獎懲記錄', icon: Award, roles: ['Admin', 'Manager', 'Junior Manager', 'Employee'] },
+                        'reports': { label: '數據報表', icon: FileText, roles: ['Admin', 'Manager', 'Junior Manager'] },
+                        'tasks': { label: '任務指派', icon: Briefcase, roles: ['Admin', 'Manager', 'Junior Manager'] },
+                        'userManagement': { label: '帳號管理', icon: UserPlus, roles: ['Admin'] },
+                        'systemSettings': { label: '系統設定', icon: Settings, roles: ['Admin'] },
+                    };
+                    return Object.entries(allItems).filter(([key, value]) => value.roles.includes(user.role)).map(([key, value]) => ({ id: key, ...value }));
+                }, [user.role]);
+
+                return (
+                    <div className="flex h-screen bg-gray-100">
+                        <aside className={`bg-gray-800 text-white flex-shrink-0 ${isSidebarOpen ? 'w-64' : 'w-20'} transition-all duration-300 ease-in-out`}>
+                            <div className="p-4 flex items-center justify-between h-16 border-b border-gray-700">
+                                <ShieldCheck className="h-8 w-8 text-blue-400" />
+                                {isSidebarOpen && <span className="text-xl font-bold">西北保全</span>}
+                            </div>
+                            <nav className="mt-4">
+                                {navItems.map(item => (<a key={item.id} href="#" onClick={() => setCurrentPage(item.id)} className={`flex items-center py-3 px-4 my-1 transition-colors duration-200 ${isSidebarOpen ? '' : 'justify-center'} ${currentPage === item.id ? 'bg-gray-700' : 'hover:bg-gray-700'}`}><item.icon className="h-6 w-6" />{isSidebarOpen && <span className="mx-4">{item.label}</span>}</a>))}
+                            </nav>
+                            <div className="absolute bottom-0 w-full"><a href="#" onClick={onLogout} className={`flex items-center py-3 px-4 my-1 transition-colors duration-200 hover:bg-red-500 ${isSidebarOpen ? '' : 'justify-center'}`}><LogOut className="h-6 w-6"/>{isSidebarOpen && <span className="mx-4">登出</span>}</a></div>
+                        </aside>
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            <header className="flex justify-between items-center p-4 bg-white border-b">
+                                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-gray-500 focus:outline-none"><svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6H20M4 12H20M4 18H11Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></button>
+                                <div className="flex items-center">
+                                    <div className="text-right mr-4"><p className="font-semibold">{user.name || user.email}</p><p className="text-sm text-gray-500">{roleName}</p></div>
+                                    <img className="h-10 w-10 rounded-full object-cover" src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=0D8ABC&color=fff`} alt="avatar" />
+                                </div>
+                            </header>
+                            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 p-6"><PageContent page={currentPage} user={user} /></main>
+                        </div>
+                    </div>
+                );
+            }
+            
+            // --- 5. 頁面內容元件 ---
+            function PageContent({ page, user }) {
+                const commonCardStyle = "bg-white p-6 rounded-lg shadow-md";
+                switch (page) {
+                    case 'home': return (<div><h1 className="text-3xl font-bold text-gray-800 mb-4">歡迎回來, {user.name || user.email}!</h1><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"><div className={commonCardStyle}><h2 className="text-xl font-semibold mb-2">今日勤務</h2><p className="text-gray-600">08:00 - 17:00</p><p className="text-gray-600">A社區 - 大門崗哨</p></div><div className={commonCardStyle}><h2 className="text-xl font-semibold mb-2">本月考核分數</h2><p className="text-3xl font-bold text-green-500">95</p></div><div className={commonCardStyle}><h2 className="text-xl font-semibold mb-2">待辦事項</h2><p className="text-gray-600">3 項未完成</p></div><div className={commonCardStyle}><h2 className="text-xl font-semibold mb-2">最新公告</h2><p className="text-gray-600">中秋節勤務調整通知</p></div></div></div>);
+                    case 'schedule': return <div><h1 className="text-2xl font-bold">勤務排班</h1><p>這裡是排班表的頁面。</p></div>;
+                    case 'clockIn': return <div><h1 className="text-2xl font-bold">GPS打卡</h1><p>這裡是GPS打卡的頁面。</p></div>;
+                    case 'records': return <div><h1 className="text-2xl font-bold">獎懲記錄</h1><p>這裡是獎懲記錄的頁面。</p></div>;
+                    case 'reports': return <div><h1 className="text-2xl font-bold">數據報表</h1><p>這裡是數據報表的頁面。</p></div>;
+                    case 'tasks': return <div><h1 className="text-2xl font-bold">任務指派</h1><p>這裡是任務指派的頁面。</p></div>;
+                    case 'userManagement': return <div><h1 className="text-2xl font-bold">帳號管理</h1><p>這裡是帳號管理的頁面。</p></div>;
+                    case 'systemSettings': return <div><h1 className="text-2xl font-bold">系統設定</h1><p>這裡是系統設定的頁面。</p></div>;
+                    default: return <div><h1 className="text-2xl font-bold">頁面不存在</h1></div>;
                 }
             }
-        });
-        
-        logoutButton.addEventListener('click', () => {
-             signOut(auth);
-        });
 
-        // --- UI Initialization ---
-        function initializeAppUI() {
-            document.getElementById('user-id').textContent = `ID: ${currentUser.uid}`;
-            
-            // Hide all views first
-            managerView.classList.add('hidden');
-            employeeView.classList.add('hidden');
-            adminView.classList.add('hidden');
-
-            // Show view based on role
-            switch(currentUserData.role) {
-                case 'admin':
-                    adminView.classList.remove('hidden');
-                    document.getElementById('user-role').textContent = '系統管理員';
-                    break;
-                case 'manager':
-                case 'junior_manager':
-                    managerView.classList.remove('hidden');
-                    const roleText = currentUserData.role === 'manager' ? '高階管理者' : '初階管理者';
-                    document.getElementById('user-role').textContent = roleText;
-                    loadManagerData();
-                    break;
-                case 'employee':
-                    employeeView.classList.remove('hidden');
-                    document.getElementById('user-role').textContent = '員工';
-                    loadEmployeeData();
-                    break;
-                default:
-                    console.error("Unknown user role:", currentUserData.role);
-            }
-        }
-        
-        // --- Manager View Logic ---
-        async function loadManagerData() {
-            const communitySelect = document.getElementById('community-select');
-            communitySelect.innerHTML = '';
-            
-            const managedCommunities = currentUserData.managedCommunities || [];
-            if (managedCommunities.length === 0) {
-                 communitySelect.innerHTML = '<option>未指派任何社區</option>';
-                 return;
-            }
-
-            for (const communityId of managedCommunities) {
-                const communityDoc = await getDoc(doc(db, "communities", communityId));
-                if (communityDoc.exists()) {
-                    const option = document.createElement('option');
-                    option.value = communityId;
-                    option.textContent = communityDoc.data().name;
-                    communitySelect.appendChild(option);
-                }
-            }
-
-            communitySelect.addEventListener('change', (e) => {
-                loadEmployeesForCommunity(e.target.value);
-            });
-            
-            // Load employees for the first community by default
-            loadEmployeesForCommunity(managedCommunities[0]);
+            ReactDOM.render(<App />, document.getElementById('root'));
         }
 
-        function loadEmployeesForCommunity(communityId) {
-            cleanupListeners(); // Unsubscribe from previous community's listeners
-            
-            const q = query(collection(db, "users"), where("assignedCommunityId", "==", communityId), where("role", "==", "employee"));
-            const employeeList = document.getElementById('employee-list');
-            
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
-                employeeList.innerHTML = ''; // Clear previous list
-                 if(querySnapshot.empty) {
-                     employeeList.innerHTML = `<p class="text-gray-500">此社區尚無員工資料。</p>`;
-                     return;
-                 }
-                querySnapshot.forEach(async (doc) => {
-                    const employee = doc.data();
-                    const employeeId = doc.id;
-                    
-                    // Fetch latest assessment score
-                    const assessmentDoc = await getDoc(doc(db, 'assessments', employeeId));
-                    const score = assessmentDoc.exists() ? assessmentDoc.data().currentScore : 'N/A';
-
-                    const card = document.createElement('div');
-                    card.className = 'p-4 border rounded-lg flex justify-between items-center bg-gray-50';
-                    card.innerHTML = `
-                        <div>
-                            <p class="font-semibold">${employee.name}</p>
-                            <p class="text-sm text-gray-500">${employee.email}</p>
-                        </div>
-                        <div class="text-right">
-                             <p class="text-lg font-bold">${score}</p>
-                             <p class="text-xs text-gray-500">考核分數</p>
-                        </div>
-                    `;
-                    employeeList.appendChild(card);
-                });
-            });
-            unsubscribeListeners.push(unsubscribe); // Store the listener for cleanup
-        }
-
-
-        // --- Employee View Logic ---
-        function loadEmployeeData() {
-             cleanupListeners();
-             const employeeId = currentUser.uid;
-             const assessmentRef = doc(db, 'assessments', employeeId);
-
-             const unsubAssessment = onSnapshot(assessmentRef, (doc) => {
-                 const scoreEl = document.getElementById('employee-score');
-                 if (doc.exists()) {
-                     scoreEl.textContent = doc.data().currentScore;
-                 } else {
-                     scoreEl.textContent = 0; // Default score
-                 }
-             });
-             unsubscribeListeners.push(unsubAssessment);
-             
-             // Listen for events
-             const eventsRef = collection(db, 'events');
-             // Get start of current month
-             const now = new Date();
-             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-             const q = query(eventsRef, where("userId", "==", employeeId), where("timestamp", ">=", startOfMonth), orderBy("timestamp", "desc"));
-             const unsubEvents = onSnapshot(q, (snapshot) => {
-                 const eventsContainer = document.getElementById('employee-events');
-                 eventsContainer.innerHTML = '';
-                 let rewards = 0;
-                 let penalties = 0;
-                 
-                 if (snapshot.empty) {
-                    eventsContainer.innerHTML = `<p class="text-gray-500 p-4 text-center">本月無任何記錄。</p>`;
-                 }
-
-                 snapshot.forEach(doc => {
-                     const event = doc.data();
-                     const isReward = event.points > 0;
-                     if(isReward) rewards++; else penalties++;
-
-                     const eventDate = event.timestamp.toDate().toLocaleDateString();
-                     
-                     const item = document.createElement('div');
-                     item.className = `p-3 rounded-md flex justify-between items-center ${isReward ? 'bg-green-100' : 'bg-red-100'}`;
-                     item.innerHTML = `
-                        <div>
-                             <p class="font-medium ${isReward ? 'text-green-800' : 'text-red-800'}">${event.description}</p>
-                             <p class="text-xs text-gray-600">${eventDate} - 由 ${event.submittedByName} 登錄</p>
-                        </div>
-                        <p class="text-lg font-bold ${isReward ? 'text-green-600' : 'text-red-600'}">${event.points > 0 ? '+' : ''}${event.points}</p>
-                     `;
-                     eventsContainer.appendChild(item);
-                 });
-
-                 document.getElementById('employee-rewards-count').textContent = rewards;
-                 document.getElementById('employee-penalties-count').textContent = penalties;
-             });
-             unsubscribeListeners.push(unsubEvents);
-        }
-
-        // --- Modal Logic ---
-        addEventButton.addEventListener('click', async () => {
-            const communityId = document.getElementById('community-select').value;
-            const employeeSelect = document.getElementById('event-employee-select');
-            employeeSelect.innerHTML = ''; // Clear options
-
-            if(communityId) {
-                 const q = query(collection(db, "users"), where("assignedCommunityId", "==", communityId), where("role", "==", "employee"));
-                 const querySnapshot = await getDocs(q);
-                 querySnapshot.forEach(doc => {
-                     const option = document.createElement('option');
-                     option.value = doc.id;
-                     option.textContent = doc.data().name;
-                     employeeSelect.appendChild(option);
-                 });
-            }
-            addEventModal.classList.remove('hidden');
-        });
-        
-        cancelEventButton.addEventListener('click', () => {
-            addEventModal.classList.add('hidden');
-            addEventForm.reset();
-        });
-
-        addEventForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const employeeId = document.getElementById('event-employee-select').value;
-            const eventType = document.querySelector('input[name="event-type"]:checked').value;
-            const description = document.getElementById('event-description').value;
-            let points = parseInt(document.getElementById('event-points').value);
-
-            if (eventType === 'penalty' && points > 0) {
-                points = -points;
-            }
-            if (eventType === 'reward' && points < 0) {
-                points = Math.abs(points);
-            }
-
+        function checkAndStart() {
             try {
-                // Add event document. The Cloud Function will handle the score update.
-                await addDoc(collection(db, 'events'), {
-                    userId: employeeId,
-                    description: description,
-                    points: points,
-                    timestamp: serverTimestamp(),
-                    submittedBy: currentUser.uid,
-                    submittedByName: currentUserData.name
-                });
-
-                alert('獎懲事件已成功登錄！分數將由系統自動更新。');
-                addEventModal.classList.add('hidden');
-                addEventForm.reset();
-
-            } catch (error) {
-                console.error("Error adding event: ", error);
-                alert(`登錄失敗: ${error.message}`);
+                if (window.React && window.ReactDOM && window.lucide && window.firebase) {
+                    startApp();
+                } else {
+                    setTimeout(checkAndStart, 50);
+                }
+            } catch (e) {
+                console.error("Critical application error:", e);
+                const root = document.getElementById('root');
+                root.innerHTML = `<div style="font-family: sans-serif; padding: 2rem; text-align: center; background-color: #fff5f5; border: 1px solid #fecaca; border-radius: 0.5rem; margin: 2rem;">
+                    <h1 style="color: #b91c1c; font-size: 1.5rem; font-weight: bold;">應用程式載入失敗</h1>
+                    <p style="margin-top: 1rem; color: #374151;">發生了無法預期的嚴重錯誤，導致程式無法啟動。</p>
+                    <p style="margin-top: 0.5rem; color: #52525b;">請檢查瀏覽器開發者工具(F12)中的 Console (主控台) 標籤，以獲取詳細的錯誤訊息。</p>
+                    <pre style="background-color: #f3f4f6; padding: 1rem; text-align: left; margin-top: 1.5rem; border-radius: 0.375rem; white-space: pre-wrap; word-break: break-all; font-family: monospace; color: #dc2626; font-size: 0.875rem;">${e.stack}</pre>
+                </div>`;
             }
-        });
-        
-        // --- Utility Functions ---
-        function cleanupListeners() {
-            unsubscribeListeners.forEach(unsubscribe => unsubscribe());
-            unsubscribeListeners = [];
         }
 
+        checkAndStart();
     </script>
 </body>
 </html>
-
