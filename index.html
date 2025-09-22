@@ -182,10 +182,8 @@
                 records: `<path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />`,
                 tasks: `<path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />`,
                 reports: `<path d="M18 20H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2zM6 12h12" /><line x1="12" y1="16" x2="12" y2="8" />`,
-                profile: `<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />`,
+                settings: `<path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.44,0.17-0.48,0.41L9.18,5.18C8.59,5.42,8.06,5.74,7.56,6.12L5.17,5.16C4.95,5.09,4.7,5.16,4.59,5.38L2.67,8.7 c-0.11,0.2-0.06,0.47,0.12,0.61l2.03,1.58C4.78,11.36,4.76,11.68,4.76,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.42,2.37 c0.04,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.48-0.41l0.42-2.37c0.59-0.24,1.12-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0.01,0.59-0.22l1.92-3.32c0.12-0.2,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>`,
                 logout: `<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />`,
-                clock: `<path d="M22 12h-4M2 12H6M12 2v4M12 22v-4M6.34 6.34l2.83 2.83M14.83 14.83l2.83 2.83M6.34 17.66l2.83-2.83M14.83 9.17l2.83-2.83" />`,
-                check: `<path d="M20 6L9 17l-5-5" />`,
                 plus: `<path d="M12 5v14M5 12h14" />`,
                 upload: `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />`,
                 download: `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />`,
@@ -248,6 +246,7 @@
                 { id: 'reports', name: '數據報表', icon: 'reports' },
                 { id: 'userManagement', name: '帳號管理', icon: 'users' },
                 { id: 'communities', name: '社區管理', icon: 'communities' },
+                { id: 'settings', name: '系統設定', icon: 'settings' },
             ];
             
             return `
@@ -334,6 +333,9 @@
                     await fetchCommunities();
                     mainContent.innerHTML = CommunitiesScreen();
                     break;
+                case 'settings':
+                    mainContent.innerHTML = SettingsScreen();
+                    break;
                 default:
                     mainContent.innerHTML = `<div class="p-6">頁面內容尚在建置中...</div>`;
             }
@@ -346,7 +348,7 @@
         const RecordsScreen = () => `<div><h2 class="text-2xl font-bold mb-4">獎懲登錄</h2><p>此頁面尚在建置中。</p></div>`;
         const TasksScreen = () => `<div><h2 class="text-2xl font-bold mb-4">任務指派</h2><p>此頁面尚在建置中。</p></div>`;
         const ReportsScreen = () => `<div><h2 class="text-2xl font-bold mb-4">數據報表</h2><p>此頁面尚在建置中。</p></div>`;
-        const CommunitiesScreen = () => `<div><h2 class="text-2xl font-bold mb-4">社區管理</h2><p>此頁面尚在建置中。</p></div>`;
+        const SettingsScreen = () => `<div><h2 class="text-2xl font-bold mb-4">系統設定</h2><p>此頁面尚在建置中。</p></div>`;
         
         const UserManagement = () => {
              const roleNameMapping = { 'Admin': '管理員', 'Manager': '高階管理者', 'Junior Manager': '初階管理者', 'Employee': '員工' };
@@ -371,7 +373,7 @@
                         </div>
                     </div>
                     <div class="space-y-4">
-                        ${state.users.map(user => `
+                        ${state.users.length > 0 ? state.users.map(user => `
                             <div class="bg-white rounded-lg shadow p-4">
                                 <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start">
                                     <div class="flex items-start gap-4">
@@ -399,17 +401,49 @@
                                     <div class="sm:col-span-full"><strong>備註:</strong> <span class="text-gray-600">${user.remarks || '無'}</span></div>
                                 </div>
                             </div>
-                        `).join('')}
+                        `).join('') : '<p class="text-center text-gray-500 py-8">目前沒有任何員工資料。</p>'}
                     </div>
                 </div>
              `;
         };
         
+        const CommunitiesScreen = () => {
+             return `
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">社區管理</h2>
+                        <button id="add-community-btn" class="flex items-center px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                            ${Icon('plus', 'w-4 h-4 mr-2')} 新增社區
+                        </button>
+                    </div>
+                     <div class="space-y-4">
+                        ${state.communities.length > 0 ? state.communities.map(comm => `
+                            <div class="bg-white rounded-lg shadow p-4">
+                               <p class="font-bold text-lg text-gray-800">${comm.name || 'N/A'}</p>
+                               <p class="text-sm text-gray-500">${comm.communityId ? `社區編號: ${comm.communityId}` : '無編號'}</p>
+                               <div class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-gray-700">
+                                    <div><strong>區域:</strong> ${comm.region || 'N/A'}</div>
+                                    <div><strong>戶數:</strong> ${comm.householdCount || 'N/A'}</div>
+                                    <div class="sm:col-span-2"><strong>地址:</strong> ${comm.address || 'N/A'}</div>
+                                    <div class="sm:col-span-2"><strong>委員名單:</strong> 
+                                        <ul class="list-disc list-inside ml-4 mt-1">
+                                            ${(comm.committee && comm.committee.length > 0) ? comm.committee.map(c => `<li>${c.title}: ${c.name}</li>`).join('') : '<span>無</span>'}
+                                        </ul>
+                                    </div>
+                               </div>
+                            </div>
+                        `).join('') : '<p class="text-center text-gray-500 py-8">目前沒有任何社區資料。</p>'}
+                    </div>
+                </div>
+            `;
+        };
+
         // --- 事件監聽 (使用事件代理) ---
         function setupEventListeners() {
             document.body.addEventListener('submit', e => {
                 if (e.target.id === 'auth-form') handleAuthSubmit(e);
                 if (e.target.id === 'user-modal-form') handleUserSubmit(e);
+                if (e.target.id === 'community-modal-form') handleCommunitySubmit(e);
             });
 
             document.body.addEventListener('click', async e => {
@@ -464,6 +498,11 @@
                 }
 
                 if (target.closest('#export-csv-btn')) handleExportCSV();
+
+                if (target.closest('#add-community-btn')) showCommunityModal();
+                if (target.closest('.add-committee-member')) addCommitteeMemberRow();
+                const removeBtn = target.closest('.remove-committee-member');
+                if (removeBtn) removeBtn.parentElement.parentElement.remove();
             });
 
             document.body.addEventListener('change', e => {
@@ -533,6 +572,49 @@
             });
         }
         
+        function showCommunityModal(community = null) {
+            const isEditMode = community !== null;
+            const title = isEditMode ? '編輯社區資料' : '新增社區';
+            
+            modalContainer.innerHTML = `
+                <div class="modal-backdrop" id="community-modal-backdrop">
+                    <div class="modal-content">
+                        <h3 class="text-xl font-bold mb-4">${title}</h3>
+                        <form id="community-modal-form" class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div><label class="block text-sm font-medium">區域</label><input type="text" id="region" class="w-full mt-1 p-2 border rounded-md" value="${community?.region || ''}"></div>
+                                <div><label class="block text-sm font-medium">社區編號</label><input type="text" id="communityId" class="w-full mt-1 p-2 border rounded-md" value="${community?.communityId || ''}"></div>
+                                <div class="sm:col-span-2"><label class="block text-sm font-medium">社區名稱*</label><input type="text" id="name" required class="w-full mt-1 p-2 border rounded-md" value="${community?.name || ''}"></div>
+                                <div class="sm:col-span-2"><label class="block text-sm font-medium">社區地址</label><input type="text" id="address" class="w-full mt-1 p-2 border rounded-md" value="${community?.address || ''}"></div>
+                                <div><label class="block text-sm font-medium">社區戶數</label><input type="number" id="householdCount" class="w-full mt-1 p-2 border rounded-md" value="${community?.householdCount || ''}"></div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium">委員名單</label>
+                                <div id="committee-list" class="space-y-2 mt-1">
+                                    <!-- 動態委員名單 -->
+                                </div>
+                                <button type="button" class="add-committee-member mt-2 text-sm text-blue-600 hover:underline">新增委員</button>
+                            </div>
+                            <div class="mt-6 flex justify-end space-x-4"><button type="button" id="cancel-community-modal" class="px-4 py-2 bg-gray-200 rounded-md">取消</button><button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md">儲存</button></div>
+                        </form>
+                    </div>
+                </div>`;
+            addCommitteeMemberRow(); // Add the first row by default
+            modalContainer.querySelector('#cancel-community-modal').addEventListener('click', closeModal);
+        }
+
+        function addCommitteeMemberRow() {
+            const container = document.getElementById('committee-list');
+            const newRow = document.createElement('div');
+            newRow.className = 'flex items-center gap-2';
+            newRow.innerHTML = `
+                <input type="text" class="w-1/3 p-2 border rounded-md committee-title" placeholder="職稱 (如:主委)">
+                <input type="text" class="flex-grow p-2 border rounded-md committee-name" placeholder="姓名">
+                <button type="button" class="remove-committee-member text-red-500 p-1 rounded-full hover:bg-red-100">${Icon('trash', 'w-4 h-4')}</button>
+            `;
+            container.appendChild(newRow);
+        }
+
         function showDeleteConfirmModal(userId, userName) {
             modalContainer.innerHTML = `
                 <div class="modal-backdrop" id="delete-modal-backdrop">
@@ -605,7 +687,6 @@
 
             try {
                 if (isEditMode) {
-                    // --- 編輯模式 ---
                     const userDocId = userId;
                     const photoFile = form.querySelector('#photo').files[0];
                     if (photoFile) {
@@ -617,7 +698,6 @@
                     alert('員工資料已更新。');
 
                 } else {
-                    // --- 新增模式 ---
                     const email = form.querySelector('#email').value;
                     const password = form.querySelector('#password').value;
                     const username = form.querySelector('#username').value;
@@ -627,6 +707,18 @@
                         throw new Error("Missing required fields");
                     }
                     
+                    // 檢查帳號和 Email 是否重複
+                    const usersRef = collection(db, `apps/${appId}/users`);
+                    const usernameQuery = query(usersRef, where("username", "==", username));
+                    const emailQuery = query(usersRef, where("email", "==", email));
+                    const [usernameSnapshot, emailSnapshot] = await Promise.all([getDocs(usernameQuery), getDocs(emailQuery)]);
+                    if (!usernameSnapshot.empty) {
+                         throw new Error(`登入帳號 "${username}" 已被使用。`);
+                    }
+                     if (!emailSnapshot.empty) {
+                        throw new Error(`Email "${email}" 已被使用。`);
+                    }
+
                     userData.email = email;
                     userData.username = username;
                     userData.createdAt = serverTimestamp();
@@ -664,11 +756,54 @@
             } catch (error) {
                 console.error("儲存員工資料失敗:", error);
                 alert(`儲存失敗：${error.message}`);
-                // 只在發生錯誤時重置按鈕狀態
-                submitButton.disabled = false;
-                submitButton.textContent = '儲存';
+            } finally {
+                // 無論成功失敗，最後都重置按鈕
+                if (document.body.contains(submitButton)) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = '儲存';
+                }
             }
         }
+        
+        async function handleCommunitySubmit(e) {
+            e.preventDefault();
+            const form = e.target;
+            const submitButton = form.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = '儲存中...';
+
+            const committeeRows = form.querySelectorAll('#committee-list > div');
+            const committee = Array.from(committeeRows).map(row => ({
+                title: row.querySelector('.committee-title').value,
+                name: row.querySelector('.committee-name').value
+            })).filter(member => member.title && member.name);
+
+            const communityData = {
+                region: form.querySelector('#region').value,
+                communityId: form.querySelector('#communityId').value,
+                name: form.querySelector('#name').value,
+                address: form.querySelector('#address').value,
+                householdCount: form.querySelector('#householdCount').value,
+                committee: committee,
+                createdAt: serverTimestamp()
+            };
+
+            try {
+                await addDoc(collection(db, `apps/${appId}/communities`), communityData);
+                alert('社區資料已成功建立！');
+                closeModal();
+                await renderContent('communities');
+            } catch (error) {
+                console.error("儲存社區資料失敗:", error);
+                alert(`儲存失敗：${error.message}`);
+            } finally {
+                 if (document.body.contains(submitButton)) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = '儲存';
+                }
+            }
+        }
+
 
         async function handleDeleteUser(userId) {
             try {
@@ -761,7 +896,19 @@
         async function fetchSchedules() { state.schedules = []; }
         async function fetchRecords() { state.records = []; }
         async function fetchTasks() { state.tasks = []; }
-        async function fetchCommunities() { state.communities = []; }
+        async function fetchCommunities() {
+             try {
+                const communitiesCollectionRef = collection(db, `apps/${appId}/communities`);
+                const q = query(communitiesCollectionRef, orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+                state.communities = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (error) { 
+                console.error("獲取社區列表失敗:", error);
+                 if (error.code === 'failed-precondition') {
+                    alert("資料庫需要為 'communities' 集合建立索引，請按 F12 打開開發者工具，並點擊 Console 中的連結來自動建立索引。");
+                }
+            }
+        }
 
         // --- 初始化應用程式 ---
         onAuthStateChanged(auth, async (firebaseUser) => {
