@@ -106,10 +106,11 @@
         // =====================================================================================
 
         // --- Firebase SDK 匯入 ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import {
             getAuth,
             onAuthStateChanged,
+            createUserWithEmailAndPassword,
             signInWithEmailAndPassword,
             signOut
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -475,6 +476,7 @@
                                      <div><label class="block text-sm font-medium">員工編號</label><input type="text" id="employeeId" class="w-full mt-1 p-2 border rounded-md" value="${user?.employeeId || ''}"></div>
                                      <div><label class="block text-sm font-medium">登入帳號*</label><input type="text" id="username" ${isEditMode ? 'disabled' : 'required'} class="w-full mt-1 p-2 border rounded-md ${isEditMode ? 'bg-gray-100' : ''}" value="${user?.username || ''}"></div>
                                      <div><label class="block text-sm font-medium">Email*</label><input type="email" id="email" ${isEditMode ? 'disabled' : 'required'} class="w-full mt-1 p-2 border rounded-md ${isEditMode ? 'bg-gray-100' : ''}" value="${user?.email || ''}"></div>
+                                     <div class="sm:col-span-2"><label class="block text-sm font-medium">密碼</label><input type="password" id="password" ${isEditMode ? '' : 'required'} class="w-full mt-1 p-2 border rounded-md" placeholder="${isEditMode ? '留空則不修改' : '此為必填項'}"></div>
                                 </div>
                             </div>
                             <hr>
@@ -524,7 +526,11 @@
                     return;
                 }
                 const userDoc = querySnapshot.docs[0];
+                // 使用者文件的 ID 就是 UID
+                const userUID = userDoc.id;
+                // 用 UID 查詢對應的 email
                 const userEmail = userDoc.data().email;
+
                 await signInWithEmailAndPassword(auth, userEmail, password);
             } catch (error) {
                 console.error("Login error:", error);
@@ -555,39 +561,68 @@
                 remarks: form.querySelector('#remarks').value,
             };
 
-            // 僅在「新增」模式下處理 Email、帳號和建立時間
-            if (!isEditMode) {
-                userData.email = form.querySelector('#email').value;
-                userData.username = form.querySelector('#username').value;
-                userData.createdAt = serverTimestamp();
-            }
-
             try {
-                let userDocId = userId;
+                if (isEditMode) {
+                    // --- 編輯模式 ---
+                    // 註：為簡化流程，此版本不處理密碼變更。
+                    const userDocId = userId;
+                    const photoFile = form.querySelector('#photo').files[0];
+                    if (photoFile) {
+                        const storageRef = ref(storage, `profile_pictures/${userDocId}/${Date.now()}_${photoFile.name}`);
+                        const snapshot = await uploadBytes(storageRef, photoFile);
+                        userData.photoURL = await getDownloadURL(snapshot.ref);
+                    }
+                    await setDoc(doc(db, `apps/${appId}/users`, userDocId), userData, { merge: true });
+                    alert('員工資料已更新。');
 
-                // 新增模式
-                if (!isEditMode) {
-                    const docRef = await addDoc(collection(db, `apps/${appId}/users`), userData);
-                    userDocId = docRef.id;
-                }
+                } else {
+                    // --- 新增模式 ---
+                    const email = form.querySelector('#email').value;
+                    const password = form.querySelector('#password').value;
+                    const username = form.querySelector('#username').value;
+                    
+                    if (!password || !email || !username) {
+                        alert('新增員工時，登入帳號、Email 和密碼為必填項。');
+                        throw new Error("Missing required fields");
+                    }
+                    
+                    userData.email = email;
+                    userData.username = username;
+                    userData.createdAt = serverTimestamp();
 
-                // 處理大頭照上傳 (新增與編輯共用)
-                const photoFile = form.querySelector('#photo').files[0];
-                if (photoFile) {
-                    const storageRef = ref(storage, `profile_pictures/${userDocId}/${Date.now()}_${photoFile.name}`);
-                    const snapshot = await uploadBytes(storageRef, photoFile);
-                    userData.photoURL = await getDownloadURL(snapshot.ref);
-                }
+                    // 1. 使用臨時的 app instance 建立 Firebase Auth 使用者，避免影響管理員登入狀態
+                    const tempAppName = `user-creation-${Date.now()}`;
+                    const tempApp = initializeApp(firebaseConfig, tempAppName);
+                    const tempAuth = getAuth(tempApp);
+                    let newUid = null;
 
-                // 編輯模式 (或為新用戶更新大頭照URL)
-                await setDoc(doc(db, `apps/${appId}/users`, userDocId), userData, { merge: true });
+                    try {
+                        const userCredential = await createUserWithEmailAndPassword(tempAuth, email, password);
+                        newUid = userCredential.user.uid;
+                    } finally {
+                        await deleteApp(tempApp); // 無論成功或失敗，都刪除臨時 app
+                    }
 
-                if (!isEditMode) {
-                    alert('員工資料已成功建立。\n\n請務必前往 Firebase Authentication 頁面，為此員工建立對應的登入帳號 (使用相同的 Email)，才能讓他們順利登入。');
+                    if (!newUid) {
+                        throw new Error("建立 Firebase Authentication 使用者失敗。");
+                    }
+
+                    // 2. 上傳大頭照 (如果有的話)
+                    const photoFile = form.querySelector('#photo').files[0];
+                    if (photoFile) {
+                        const storageRef = ref(storage, `profile_pictures/${newUid}/${Date.now()}_${photoFile.name}`);
+                        const snapshot = await uploadBytes(storageRef, photoFile);
+                        userData.photoURL = await getDownloadURL(snapshot.ref);
+                    }
+
+                    // 3. 將員工資料寫入 Firestore，並以 Auth UID 作為文件 ID
+                    await setDoc(doc(db, `apps/${appId}/users`, newUid), userData);
+                    alert('員工帳號與資料已成功建立！');
                 }
 
                 closeModal();
                 await renderContent('userManagement');
+
             } catch (error) {
                 console.error("儲存員工資料失敗:", error);
                 alert(`儲存失敗：${error.message}`);
@@ -678,12 +713,18 @@
         // --- 初始化應用程式 ---
         onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
+                // 在登入邏輯中，我們用 username 換 email 登入，
+                // 但 Firestore 的 user document ID 應該是 UID。
+                // 我們需要確保登入後，能用 firebaseUser.uid 找到正確的 document。
                 const userDocRef = doc(db, `apps/${appId}/users`, firebaseUser.uid);
                 const userDocSnap = await getDoc(userDocRef);
+
                 if (userDocSnap.exists()) {
                     state.user = { uid: firebaseUser.uid, id: userDocSnap.id, ...userDocSnap.data() };
                 } else {
-                    state.user = { uid: firebaseUser.uid, id: firebaseUser.uid, email: firebaseUser.email, role: 'Employee', name: '新用戶' };
+                    // 這種情況可能發生在：Auth user 存在，但 Firestore document 遺失
+                    console.warn("Firestore user document not found for UID:", firebaseUser.uid);
+                    state.user = { uid: firebaseUser.uid, id: firebaseUser.uid, email: firebaseUser.email, role: 'Employee', name: '資料遺失' };
                 }
             } else {
                 state.user = null;
