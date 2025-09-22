@@ -165,6 +165,7 @@
             schedules: [],
             records: [],
             tasks: [],
+            communities: [],
         };
 
         // --- 渲染目標 ---
@@ -177,6 +178,7 @@
                 dashboard: `<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />`,
                 users: `<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 3a4 4 0 110 8 4 4 0 010-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />`,
                 schedule: `<path d="M8 2v4M16 2v4M3 10h18M3 6h18M3 14h18M3 18h18" />`,
+                communities: `<path d="M8 20V10c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v10M2 20h20M4 20V4a2 2 0 012-2h12a2 2 0 012 2v16"/>`,
                 records: `<path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />`,
                 tasks: `<path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />`,
                 reports: `<path d="M18 20H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2zM6 12h12" /><line x1="12" y1="16" x2="12" y2="8" />`,
@@ -245,6 +247,7 @@
                 { id: 'tasks', name: '任務指派', icon: 'tasks' },
                 { id: 'reports', name: '數據報表', icon: 'reports' },
                 { id: 'userManagement', name: '帳號管理', icon: 'users' },
+                { id: 'communities', name: '社區管理', icon: 'communities' },
             ];
             
             return `
@@ -327,6 +330,10 @@
                     await fetchAllUsers();
                     mainContent.innerHTML = UserManagement();
                     break;
+                case 'communities':
+                    await fetchCommunities();
+                    mainContent.innerHTML = CommunitiesScreen();
+                    break;
                 default:
                     mainContent.innerHTML = `<div class="p-6">頁面內容尚在建置中...</div>`;
             }
@@ -339,8 +346,10 @@
         const RecordsScreen = () => `<div><h2 class="text-2xl font-bold mb-4">獎懲登錄</h2><p>此頁面尚在建置中。</p></div>`;
         const TasksScreen = () => `<div><h2 class="text-2xl font-bold mb-4">任務指派</h2><p>此頁面尚在建置中。</p></div>`;
         const ReportsScreen = () => `<div><h2 class="text-2xl font-bold mb-4">數據報表</h2><p>此頁面尚在建置中。</p></div>`;
+        const CommunitiesScreen = () => `<div><h2 class="text-2xl font-bold mb-4">社區管理</h2><p>此頁面尚在建置中。</p></div>`;
         
         const UserManagement = () => {
+             const roleNameMapping = { 'Admin': '管理員', 'Manager': '高階管理者', 'Junior Manager': '初階管理者', 'Employee': '員工' };
              const statusNameMapping = { active: '在職', inactive: '非在職', terminated: '離職' };
              const statusColorMapping = { active: 'bg-green-100 text-green-800', inactive: 'bg-yellow-100 text-yellow-800', terminated: 'bg-red-100 text-red-800' };
 
@@ -361,42 +370,36 @@
                             </label>
                         </div>
                     </div>
-                    <div class="bg-white rounded-lg shadow overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">姓名</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">手機號碼</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">服務社區</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">狀態</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                ${state.users.map(user => `
-                                    <tr key="${user.id}">
-                                        <td class="px-4 py-4 whitespace-nowrap flex items-center">
-                                            <img class="h-10 w-10 rounded-full object-cover mr-3" src="${user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=random`}" alt="${user.name}">
-                                            <div>
-                                                <div class="text-sm font-medium text-gray-900">${user.name || 'N/A'}</div>
-                                                <div class="text-xs text-gray-500">${user.employeeId || '無編號'}</div>
-                                            </div>
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${user.phoneNumber || 'N/A'}</td>
-                                        <td class="px-4 py-4 whitespace-nowrap hidden sm:table-cell text-sm text-gray-500">${user.serviceCommunity || 'N/A'}</td>
-                                        <td class="px-4 py-4 whitespace-nowrap">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColorMapping[user.status] || 'bg-gray-100 text-gray-800'}">
+                    <div class="space-y-4">
+                        ${state.users.map(user => `
+                            <div class="bg-white rounded-lg shadow p-4">
+                                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start">
+                                    <div class="flex items-start gap-4">
+                                        <img class="h-16 w-16 rounded-full object-cover flex-shrink-0" src="${user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=random`}" alt="${user.name}">
+                                        <div class="flex-grow">
+                                            <p class="font-bold text-lg text-gray-800">${user.name || 'N/A'}</p>
+                                            <p class="text-sm text-gray-500">${user.employeeId ? `員工編號: ${user.employeeId}` : '無編號'}</p>
+                                            <span class="mt-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColorMapping[user.status] || 'bg-gray-100 text-gray-800'}">
                                                 ${statusNameMapping[user.status] || '未知'}
                                             </span>
-                                        </td>
-                                        <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                                            <button data-userid="${user.id}" class="edit-user-btn p-2 text-blue-600 hover:text-blue-800">${Icon('edit', 'w-5 h-5')}</button>
-                                            <button data-userid="${user.id}" data-username="${user.name || '該用戶'}" class="delete-user-btn p-2 text-red-600 hover:text-red-800">${Icon('trash', 'w-5 h-5')}</button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
+                                        </div>
+                                    </div>
+                                    <div class="flex-shrink-0 mt-4 sm:mt-0 flex items-center gap-2">
+                                        <button data-userid="${user.id}" class="edit-user-btn p-2 text-blue-600 hover:text-blue-800">${Icon('edit', 'w-5 h-5')}</button>
+                                        <button data-userid="${user.id}" data-username="${user.name || '該用戶'}" class="delete-user-btn p-2 text-red-600 hover:text-red-800">${Icon('trash', 'w-5 h-5')}</button>
+                                    </div>
+                                </div>
+                                <div class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-sm text-gray-700">
+                                    <div><strong>角色:</strong> ${roleNameMapping[user.role] || 'N/A'}</div>
+                                    <div><strong>手機:</strong> ${user.phoneNumber || 'N/A'}</div>
+                                    <div><strong>身分證:</strong> ${user.nationalId || 'N/A'}</div>
+                                    <div><strong>生日:</strong> ${user.dob || 'N/A'}</div>
+                                    <div class="sm:col-span-2"><strong>服務社區:</strong> ${user.serviceCommunity || 'N/A'}</div>
+                                    <div class="sm:col-span-full"><strong>證照:</strong> <span class="text-gray-600">${user.certifications || '無'}</span></div>
+                                    <div class="sm:col-span-full"><strong>備註:</strong> <span class="text-gray-600">${user.remarks || '無'}</span></div>
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
                 </div>
              `;
@@ -661,7 +664,7 @@
             } catch (error) {
                 console.error("儲存員工資料失敗:", error);
                 alert(`儲存失敗：${error.message}`);
-            } finally {
+                // 只在發生錯誤時重置按鈕狀態
                 submitButton.disabled = false;
                 submitButton.textContent = '儲存';
             }
@@ -758,6 +761,7 @@
         async function fetchSchedules() { state.schedules = []; }
         async function fetchRecords() { state.records = []; }
         async function fetchTasks() { state.tasks = []; }
+        async function fetchCommunities() { state.communities = []; }
 
         // --- 初始化應用程式 ---
         onAuthStateChanged(auth, async (firebaseUser) => {
