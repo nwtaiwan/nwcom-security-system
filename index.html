@@ -11,6 +11,7 @@
             height: 100%;
             margin: 0;
             padding: 0;
+            overflow-x: hidden; /* 防止水平滾動 */
         }
         /* 微調滾動條樣式 */
         ::-webkit-scrollbar {
@@ -26,6 +27,27 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        /* 簡單的 Modal 樣式 */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 500px;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -35,8 +57,50 @@
             <div class="text-xl font-semibold">載入中...</div>
         </div>
     </div>
+    <div id="modal-container"></div>
+
 
     <script type="module">
+        // =====================================================================================
+        // !! 重要：如何修正「權限不足 (Missing or insufficient permissions)」錯誤 !!
+        //
+        // 這個錯誤是因為您的 Firestore 安全規則阻止了「尚未登入」的應用程式讀取使用者資料。
+        // 為了實現「使用帳號登入」功能，系統必須在您登入前，先根據您輸入的帳號去資料庫查詢對應的 Email。
+        //
+        // 請將您 Firebase 專案中的 Firestore 安全規則更新為以下內容來解決此問題：
+        //
+        // 1. 前往您的 Firebase Console -> Firestore Database -> Rules (規則) 頁面。
+        // 2. 將編輯器中的所有內容替換為下面的規則。
+        // 3. 點擊 "Publish" (發布)。
+        //
+        // --- 請複製並貼上這段規則 ---
+        /*
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+
+            // 規則一：針對 'users' 集合
+            // 允許任何人讀取使用者列表。這是「帳號登入」功能【必需】的權限，
+            // 因為系統需要在用戶登入前查詢 username 換取 email。
+            // 警告：這會讓所有使用者的資料（包含Email）變為公開可讀。在正式產品中，
+            // 建議使用更安全的方式（例如 Cloud Function）來處理登入。
+            match /apps/{appId}/users/{userId} {
+              allow read: if true;
+              // 只允許已登入的使用者修改自己的資料。
+              allow write: if request.auth != null && request.auth.uid == userId;
+            }
+
+            // 規則二：針對所有「其他」集合（如班表、獎懲紀錄等）
+            // 這條規則涵蓋除了 users 以外的所有資料。
+            match /apps/{appId}/{collection}/{docId=**} {
+              // 必須是已登入的使用者才能讀寫。
+              allow read, write: if request.auth != null;
+            }
+          }
+        }
+        */
+        // =====================================================================================
+
         // --- Firebase SDK 匯入 ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import {
@@ -54,7 +118,10 @@
             collection,
             getDocs,
             addDoc,
-            serverTimestamp
+            serverTimestamp,
+            query,
+            orderBy,
+            where
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         // --- Firebase 設定 ---
@@ -80,14 +147,17 @@
             user: null,
             loading: true,
             error: '',
-            isLoginView: false,
             activeView: 'dashboard',
-            isSidebarOpen: true,
-            usersForManagement: [],
+            isSidebarOpen: false, // 手機版預設關閉
+            users: [],
+            schedules: [],
+            records: [],
+            tasks: [],
         };
 
         // --- 渲染目標 ---
         const appContainer = document.getElementById('app');
+        const modalContainer = document.getElementById('modal-container');
 
         // --- SVG 圖示組件 ---
         const Icon = (name, className = '') => {
@@ -96,31 +166,28 @@
                 users: `<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 3a4 4 0 110 8 4 4 0 010-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />`,
                 schedule: `<path d="M8 2v4M16 2v4M3 10h18M3 6h18M3 14h18M3 18h18" />`,
                 records: `<path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />`,
+                tasks: `<path d="M22 11.08V12a10 10 0 11-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />`,
+                reports: `<path d="M18 20H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2zM6 12h12" /><line x1="12" y1="16" x2="12" y2="8" />`,
                 profile: `<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />`,
                 logout: `<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />`,
                 clock: `<path d="M22 12h-4M2 12H6M12 2v4M12 22v-4M6.34 6.34l2.83 2.83M14.83 14.83l2.83 2.83M6.34 17.66l2.83-2.83M14.83 9.17l2.83-2.83" />`,
                 check: `<path d="M20 6L9 17l-5-5" />`,
                 plus: `<path d="M12 5v14M5 12h14" />`,
+                trash: `<path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />`,
+                menu: `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>`
             };
-            return `
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${className}">
-                    ${icons[name] || ''}
-                </svg>
-            `;
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${className}">${icons[name] || ''}</svg>`;
         };
         
         // --- 渲染函式 ---
-
         function render() {
-            appContainer.innerHTML = ''; // 清空容器
+            appContainer.innerHTML = ''; 
 
             if (state.error) {
                 const errorDiv = document.createElement('div');
-                errorDiv.className = 'p-4 text-white bg-red-500 fixed top-0 left-0 right-0 z-50';
+                errorDiv.className = 'p-4 text-white bg-red-500 fixed top-0 left-0 right-0 z-50 text-center';
                 errorDiv.textContent = state.error;
                 appContainer.appendChild(errorDiv);
-                // 3秒後自動消失
                 setTimeout(() => { 
                     state.error = '';
                     if(document.body.contains(errorDiv)) errorDiv.remove();
@@ -137,37 +204,19 @@
             } else {
                 appContainer.innerHTML = AuthScreen();
             }
-            addEventListeners();
         }
         
         // --- 組件模板 ---
-
         const AuthScreen = () => {
              return `
-                <div class="flex items-center justify-center min-h-screen bg-gray-100">
-                    <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
+                <div class="flex items-center justify-center min-h-screen bg-gray-100 px-4">
+                    <div class="w-full max-w-sm p-8 space-y-6 bg-white rounded-lg shadow-md">
                         <h2 class="text-2xl font-bold text-center text-gray-800">西北保全勤務管理系統</h2>
+                        <div class="text-center text-gray-500 text-sm">請登入以繼續</div>
                         <form id="auth-form" class="space-y-6">
-                            ${!state.isLoginView ? `
-                                <>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">姓名</label>
-                                        <input type="text" id="name" value="測試管理員" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700">角色 (僅供測試)</label>
-                                        <select id="role" class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                                            <option value="Admin" selected>管理員</option>
-                                            <option value="Manager">高階管理者</option>
-                                            <option value="Junior Manager">初階管理者</option>
-                                            <option value="Employee">員工</option>
-                                        </select>
-                                    </div>
-                                </>
-                            ` : ''}
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">帳號 (Email)</label>
-                                <input type="email" id="email" value="test@test.com" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+                                <label class="block text-sm font-medium text-gray-700">帳號</label>
+                                <input type="text" id="username" value="test" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">密碼</label>
@@ -175,172 +224,332 @@
                             </div>
                             <div>
                                 <button type="submit" class="w-full px-4 py-2 font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    ${state.isLoginView ? '登入' : '註冊'}
+                                    登入
                                 </button>
                             </div>
                         </form>
-                        <p class="text-sm text-center">
-                            <a href="#" id="toggle-auth-mode" class="font-medium text-blue-600 hover:text-blue-500">
-                                ${state.isLoginView ? '還沒有帳號？前往註冊' : '已經有帳號？前往登入'}
-                            </a>
-                        </p>
+                        <div id="auth-feedback" class="text-center text-sm text-red-500 h-4"></div>
                     </div>
                 </div>
             `;
         };
 
         const MainLayout = () => {
-            const roleNameMapping = {
-                'Admin': '管理員', 'Manager': '高階管理者', 'Junior Manager': '初階管理者', 'Employee': '員工'
-            };
-            
-            const getNavItems = () => {
-                 const baseNav = [{ id: 'dashboard', name: '儀表板', icon: 'dashboard' }];
-                 const roleNavs = {
-                    Admin: [...baseNav, { id: 'userManagement', name: '帳號管理', icon: 'users' }],
-                    Manager: [...baseNav, { id: 'scheduling', name: '勤務排班', icon: 'schedule' }, { id: 'records', name: '獎懲登錄', icon: 'records' }],
-                    'Junior Manager': [...baseNav, { id: 'scheduling', name: '勤務排班', icon: 'schedule' }, { id: 'records', name: '獎懲登錄', icon: 'records' }],
-                    Employee: [...baseNav, { id: 'mySchedule', name: '我的班表', icon: 'schedule' }, { id: 'myRecords', name: '我的獎懲', icon: 'records' }],
-                };
-                return roleNavs[state.user.role] || baseNav;
-            }
+            const roleNameMapping = { 'Admin': '管理員', 'Manager': '高階管理者', 'Junior Manager': '初階管理者', 'Employee': '員工' };
+            const fullNavItems = [
+                { id: 'dashboard', name: '儀表板', icon: 'dashboard' },
+                { id: 'scheduling', name: '勤務排班', icon: 'schedule' },
+                { id: 'records', name: '獎懲登錄', icon: 'records' },
+                { id: 'tasks', name: '任務指派', icon: 'tasks' },
+                { id: 'reports', name: '數據報表', icon: 'reports' },
+                { id: 'userManagement', name: '帳號管理', icon: 'users' },
+            ];
             
             return `
-                <div class="flex h-screen bg-gray-50">
-                    <aside class="bg-gray-800 text-white flex flex-col transition-all duration-300 ${state.isSidebarOpen ? 'w-64' : 'w-20'}">
+                <div class="relative flex h-screen bg-gray-50 overflow-hidden">
+                    <!-- 行動版側邊欄背景 -->
+                    ${state.isSidebarOpen ? `<div id="sidebar-backdrop" class="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"></div>` : ''}
+                    
+                    <!-- 側邊欄 -->
+                    <aside class="bg-gray-800 text-white flex flex-col w-64 fixed inset-y-0 left-0 z-30
+                                 transform transition-transform duration-300 ease-in-out 
+                                 ${state.isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+                                 md:relative md:translate-x-0">
                         <div class="flex items-center justify-center h-16 border-b border-gray-700">
-                            <h1 class="font-bold text-lg ${state.isSidebarOpen ? '' : 'hidden'}">西北保全</h1>
+                            <h1 class="font-bold text-lg">西北保全</h1>
                         </div>
-                        <nav class="flex-1 px-4 py-4 space-y-2">
-                            ${getNavItems().map(item => `
+                        <nav id="main-nav" class="flex-1 px-4 py-4 space-y-2">
+                            ${fullNavItems.map(item => `
                                 <a href="#" data-view="${item.id}" class="nav-link flex items-center px-4 py-2.5 rounded-md transition-colors ${state.activeView === item.id ? 'bg-blue-600' : 'hover:bg-gray-700'}">
                                     ${Icon(item.icon, 'w-6 h-6')}
-                                    <span class="ml-4 ${state.isSidebarOpen ? '' : 'hidden'}">${item.name}</span>
+                                    <span class="ml-4">${item.name}</span>
                                 </a>
                             `).join('')}
                         </nav>
                         <div class="px-4 py-4 border-t border-gray-700">
-                            <a href="#" id="signout-btn" class="flex items-center px-4 py-2.5 rounded-md hover:bg-gray-700">
+                            <a href="#" id="signout-btn" class="flex items-center w-full px-4 py-2.5 rounded-md hover:bg-gray-700">
                                 ${Icon('logout', 'w-6 h-6')}
-                                <span class="ml-4 ${state.isSidebarOpen ? '' : 'hidden'}">登出</span>
+                                <span class="ml-4">登出</span>
                             </a>
                         </div>
                     </aside>
+                    
                     <div class="flex-1 flex flex-col">
-                        <header class="flex items-center justify-between h-16 px-6 bg-white border-b">
-                            <button id="toggle-sidebar" class="p-2 -ml-2 rounded-md focus:outline-none focus:ring">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        <header class="flex items-center justify-between h-16 px-4 bg-white border-b">
+                            <button id="toggle-sidebar" class="p-2 -ml-2 rounded-md md:hidden focus:outline-none focus:ring">
+                                ${Icon('menu', 'w-6 h-6')}
                             </button>
+                            <div class="hidden md:block"></div> <!-- 佔位符 -->
                             <div class="flex items-center space-x-4">
-                                ${Icon('profile', 'w-6 h-6')}
-                                <div>
-                                    <p class="font-semibold">${state.user.name}</p>
-                                    <p class="text-sm text-gray-500">${roleNameMapping[state.user.role]}</p>
+                                ${Icon('profile', 'w-6 h-6 text-gray-600')}
+                                <div class="text-right">
+                                    <p class="font-semibold text-sm">${state.user.name}</p>
+                                    <p class="text-xs text-gray-500">${roleNameMapping[state.user.role]}</p>
                                 </div>
                             </div>
                         </header>
-                        <main id="main-content" class="flex-1 p-6 overflow-y-auto bg-gray-100">
-                           ${renderContent()}
+                        <main id="main-content" class="flex-1 p-4 md:p-6 overflow-y-auto bg-gray-100">
+                           <!-- 內容將由 JS 動態載入 -->
                         </main>
                     </div>
                 </div>
             `;
         };
 
-        const renderContent = () => {
-             switch (state.activeView) {
-                case 'dashboard':
-                    if (state.user.role === 'Admin') return AdminDashboard();
-                    if (state.user.role === 'Manager' || state.user.role === 'Junior Manager') return ManagerDashboard();
-                    if (state.user.role === 'Employee') return EmployeeDashboard();
-                    return `<div>儀表板</div>`;
-                case 'userManagement':
-                    fetchUsersForManagement();
-                    return UserManagement();
-                default:
-                    return `<div class="p-6">頁面內容尚在建置中...</div>`;
-            }
-        };
+        async function renderContent(view) {
+            const mainContent = document.getElementById('main-content');
+            if (!mainContent) return;
+            
+            mainContent.innerHTML = `<div class="flex justify-center items-center h-full"><div class="text-gray-500">載入頁面中...</div></div>`;
 
+            switch (view) {
+                case 'dashboard':
+                    if (state.user.role === 'Admin') mainContent.innerHTML = AdminDashboard();
+                    else if (state.user.role === 'Manager' || state.user.role === 'Junior Manager') mainContent.innerHTML = ManagerDashboard();
+                    else mainContent.innerHTML = EmployeeDashboard();
+                    break;
+                case 'scheduling':
+                    await fetchSchedules();
+                    mainContent.innerHTML = SchedulingScreen();
+                    break;
+                case 'records':
+                    await fetchAllUsers();
+                    await fetchRecords();
+                    mainContent.innerHTML = RecordsScreen();
+                    break;
+                case 'tasks':
+                    await fetchAllUsers();
+                    await fetchTasks();
+                    mainContent.innerHTML = TasksScreen();
+                    break;
+                case 'reports':
+                    mainContent.innerHTML = ReportsScreen();
+                    break;
+                case 'userManagement':
+                    await fetchAllUsers();
+                    mainContent.innerHTML = UserManagement();
+                    break;
+                default:
+                    mainContent.innerHTML = `<div class="p-6">頁面內容尚在建置中...</div>`;
+            }
+        }
+
+        // --- 各功能頁面模板 ---
         const EmployeeDashboard = () => {
-            return `
+             return `
                 <div>
                     <h2 class="text-2xl font-bold mb-4">員工儀表板</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="p-6 bg-white rounded-lg shadow">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-4 bg-white rounded-lg shadow">
                             <h3 class="text-lg font-semibold mb-2">GPS 打卡</h3>
-                            <p class="text-gray-600 mb-4">點擊按鈕以您目前的位置進行打卡簽到。</p>
-                            <button id="clock-in-btn" class="flex items-center justify-center px-4 py-2 font-bold text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-400">
+                            <p class="text-gray-600 mb-4 text-sm">點擊按鈕以您目前的位置進行打卡簽到。</p>
+                            <button id="clock-in-btn" class="flex items-center justify-center w-full px-4 py-3 font-bold text-white bg-green-600 rounded-md hover:bg-green-700 disabled:bg-gray-400">
                                 ${Icon('clock', 'w-5 h-5 mr-2')}
                                 <span id="clock-in-text">簽到打卡</span>
                             </button>
-                            <div id="clock-in-feedback" class="mt-2"></div>
+                            <div id="clock-in-feedback" class="mt-2 text-sm text-center h-5"></div>
                         </div>
-                        <div class="p-6 bg-white rounded-lg shadow">
+                        <div class="p-4 bg-white rounded-lg shadow">
                             <h3 class="text-lg font-semibold mb-2">即時考核分數 (示意)</h3>
-                            <p class="text-5xl font-bold text-blue-600">88</p>
-                            <p class="text-gray-500 mt-2">分數將根據您的勤務表現與獎懲記錄即時更新。</p>
+                            <p class="text-5xl font-bold text-blue-600 text-center">88</p>
+                            <p class="text-gray-500 mt-2 text-sm text-center">根據您的勤務表現與獎懲記錄即時更新。</p>
                         </div>
                     </div>
                 </div>
             `;
         };
+        const ManagerDashboard = () => `<div><h2 class="text-2xl font-bold mb-4">管理者儀表板</h2></div>`;
+        const AdminDashboard = () => `<div><h2 class="text-2xl font-bold mb-4">系統管理員儀表板</h2></div>`;
         
-        const ManagerDashboard = () => `
-            <div>
-                <h2 class="text-2xl font-bold mb-4">管理者儀表板</h2>
-                <div class="p-6 bg-white rounded-lg shadow">
-                    <h3 class="text-lg font-semibold mb-2">團隊總覽</h3>
-                    <p>這裡將顯示您所管轄團隊的整體勤務狀況、出勤率與績效摘要。</p>
-                </div>
-            </div>`;
-
-        const AdminDashboard = () => `
-             <div>
-                <h2 class="text-2xl font-bold mb-4">系統管理員儀表板</h2>
-                <div class="p-6 bg-white rounded-lg shadow">
-                    <h3 class="text-lg font-semibold mb-2">系統狀態</h3>
-                    <p>這裡將顯示系統的整體使用狀況、用戶總數、以及資料庫用量等關鍵指標。</p>
-                </div>
-            </div>`;
-            
-        const UserManagement = () => {
-             const roleNameMapping = { 'Admin': '管理員', 'Manager': '高階管理者', 'Junior Manager': '初階管理者', 'Employee': '員工' };
-
-             if (state.usersForManagement.length === 0) {
-                 return `<div>讀取使用者資料中...</div>`;
-             }
-
-             return `
+        const SchedulingScreen = () => {
+            const formatDate = (date) => date ? new Date(date.seconds * 1000).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'N/A';
+            return `
                 <div>
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-2xl font-bold">帳號管理</h2>
-                        <button class="flex items-center px-4 py-2 font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700">
-                            ${Icon('plus', 'w-5 h-5 mr-2')} 新增使用者
+                        <h2 class="text-2xl font-bold">勤務排班</h2>
+                        <button id="add-schedule-btn" class="flex items-center px-4 py-2 font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                            ${Icon('plus', 'w-5 h-5 mr-2')} 新增
                         </button>
                     </div>
                     <div class="bg-white rounded-lg shadow overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">姓名</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">角色</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">註冊時間</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">員工</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">開始時間</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden sm:table-cell">地點</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                ${state.usersForManagement.map(user => `
+                                ${state.schedules.length > 0 ? state.schedules.map(s => `
+                                    <tr>
+                                        <td class="px-4 py-4 whitespace-nowrap">${s.employeeName}</td>
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm">${formatDate(s.startTime)}</td>
+                                        <td class="px-4 py-4 whitespace-nowrap hidden sm:table-cell">${s.location}</td>
+                                    </tr>
+                                `).join('') : `<tr><td colspan="3" class="text-center py-4">目前沒有排班資料</td></tr>`}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        };
+
+        const RecordsScreen = () => {
+            const formatDate = (date) => date ? new Date(date.seconds * 1000).toLocaleString('zh-TW') : 'N/A';
+            return `
+                <div>
+                     <h2 class="text-2xl font-bold mb-4">獎懲事件登錄</h2>
+                    <div class="p-4 bg-white rounded-lg shadow mb-6">
+                        <form id="add-record-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">員工</label>
+                                <select id="record-employee" required class="w-full mt-1 p-2 border rounded-md">${state.users.map(u => `<option value="${u.id}|${u.name}">${u.name}</option>`).join('')}</select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">類型</label>
+                                    <select id="record-type" required class="w-full mt-1 p-2 border rounded-md"><option value="merit">獎勵</option><option value="demerit">懲處</option></select>
+                                </div>
+                                 <div>
+                                    <label class="block text-sm font-medium text-gray-700">分數 (+/-)</label>
+                                    <input type="number" id="record-points" required class="w-full mt-1 p-2 border rounded-md" value="1">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">事由</label>
+                                <input type="text" id="record-reason" required class="w-full mt-1 p-2 border rounded-md" placeholder="例如：拾獲客戶遺失物">
+                            </div>
+                            <div>
+                                <button type="submit" class="w-full flex items-center justify-center px-4 py-2 font-bold text-white bg-green-600 rounded-md hover:bg-green-700">
+                                    ${Icon('plus', 'w-5 h-5 mr-2')} 提交紀錄
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                     <div class="bg-white rounded-lg shadow overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                           <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">員工</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">事由</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">分數</th>
+                                </tr>
+                            </thead>
+                             <tbody class="bg-white divide-y divide-gray-200">
+                                 ${state.records.length > 0 ? state.records.map(r => `
+                                    <tr class="${r.type === 'merit' ? 'bg-green-50' : 'bg-red-50'}">
+                                        <td class="px-4 py-4">${r.employeeName}</td>
+                                        <td class="px-4 py-4">${r.reason}</td>
+                                        <td class="px-4 py-4 font-bold ${r.type === 'merit' ? 'text-green-600' : 'text-red-600'}">${r.type === 'merit' ? '+' : '-'}${r.points}</td>
+                                    </tr>
+                                `).join('') : `<tr><td colspan="3" class="text-center py-4">目前沒有獎懲資料</td></tr>`}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        };
+
+        const TasksScreen = () => {
+             const formatDate = (date) => date ? new Date(date.seconds * 1000).toLocaleDateString() : 'N/A';
+             return `
+                <div>
+                    <h2 class="text-2xl font-bold mb-4">任務指派</h2>
+                     <div class="p-4 bg-white rounded-lg shadow mb-6">
+                        <form id="add-task-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">任務標題</label>
+                                <input type="text" id="task-title" required class="w-full mt-1 p-2 border rounded-md" placeholder="例如：巡邏點設備檢查">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">指派給</label>
+                                <select id="task-employee" required class="w-full mt-1 p-2 border rounded-md">${state.users.map(u => `<option value="${u.id}|${u.name}">${u.name}</option>`).join('')}</select>
+                            </div>
+                            <div>
+                                <button type="submit" class="w-full flex items-center justify-center px-4 py-2 font-bold text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                                    ${Icon('plus', 'w-5 h-5 mr-2')} 新增任務
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                     <div class="bg-white rounded-lg shadow overflow-x-auto">
+                         <table class="min-w-full divide-y divide-gray-200">
+                           <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">任務</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">指派對象</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">狀態</th>
+                                </tr>
+                            </thead>
+                             <tbody class="bg-white divide-y divide-gray-200">
+                                  ${state.tasks.length > 0 ? state.tasks.map(t => `
+                                    <tr>
+                                        <td class="px-4 py-4">${t.title}</td>
+                                        <td class="px-4 py-4">${t.employeeName}</td>
+                                        <td class="px-4 py-4">
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'completed' ? 'bg-gray-100 text-gray-800' : 'bg-yellow-100 text-yellow-800'}">
+                                                ${t.status === 'completed' ? '已完成' : '待處理'}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                `).join('') : `<tr><td colspan="3" class="text-center py-4">目前沒有任務</td></tr>`}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        };
+        
+        const ReportsScreen = () => `
+            <div>
+                <h2 class="text-2xl font-bold mb-4">數據報表與分析</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="p-4 bg-white rounded-lg shadow">
+                        <h3 class="font-semibold text-lg mb-2">團隊出勤率 (示意)</h3>
+                        <p class="text-3xl font-bold text-green-600">98.5%</p>
+                        <p class="text-gray-500 text-sm">近 30 天統計</p>
+                    </div>
+                     <div class="p-4 bg-white rounded-lg shadow">
+                        <h3 class="font-semibold text-lg mb-2">獎懲事件統計 (示意)</h3>
+                        <p class="text-gray-700 text-sm"><span class="font-bold text-green-600">獎勵:</span> 12 件</p>
+                        <p class="text-gray-700 text-sm"><span class="font-bold text-red-600">懲處:</span> 2 件</p>
+                    </div>
+                    <div class="p-4 bg-white rounded-lg shadow col-span-1 sm:col-span-2">
+                        <h3 class="font-semibold text-lg mb-2">個人績效排名 (示意)</h3>
+                        <ol class="list-decimal list-inside space-y-1 text-sm">
+                            <li>王大明 (95分)</li>
+                            <li>陳小美 (92分)</li>
+                            <li>林志華 (89分)</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        `;
+            
+        const UserManagement = () => {
+             const roleNameMapping = { 'Admin': '管理員', 'Manager': '高階管理者', 'Junior Manager': '初階管理者', 'Employee': '員工' };
+             return `
+                <div>
+                    <h2 class="text-2xl font-bold mb-4">帳號管理</h2>
+                    <div class="bg-white rounded-lg shadow overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">姓名</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">角色</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                ${state.users.map(user => `
                                     <tr key="${user.id}">
-                                        <td class="px-6 py-4 whitespace-nowrap">${user.name}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">${user.email}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap">
+                                        <td class="px-4 py-4 whitespace-nowrap">${user.name}</td>
+                                        <td class="px-4 py-4 whitespace-nowrap text-sm">${user.email}</td>
+                                        <td class="px-4 py-4 whitespace-nowrap hidden sm:table-cell">
                                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
                                             ${roleNameMapping[user.role] || user.role}
                                             </span>
-                                        </td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            ${user.createdAt ? new Date(user.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}
                                         </td>
                                     </tr>
                                 `).join('')}
@@ -351,177 +560,290 @@
              `;
         };
         
-        // --- 事件監聽與處理邏輯 ---
-        
-        function addEventListeners() {
-            // 登入/註冊
-            const authForm = document.getElementById('auth-form');
-            if (authForm) {
-                authForm.addEventListener('submit', handleAuthSubmit);
-            }
-            const toggleAuthMode = document.getElementById('toggle-auth-mode');
-            if(toggleAuthMode) {
-                toggleAuthMode.addEventListener('click', e => {
-                    e.preventDefault();
-                    state.isLoginView = !state.isLoginView;
-                    render();
-                });
-            }
-
-            // 主畫面
-            const signoutBtn = document.getElementById('signout-btn');
-            if (signoutBtn) {
-                signoutBtn.addEventListener('click', handleSignOut);
-            }
-            const toggleSidebarBtn = document.getElementById('toggle-sidebar');
-            if (toggleSidebarBtn) {
-                toggleSidebarBtn.addEventListener('click', () => {
-                    state.isSidebarOpen = !state.isSidebarOpen;
-                    render();
-                });
-            }
-            const navLinks = document.querySelectorAll('.nav-link');
-            navLinks.forEach(link => {
-                link.addEventListener('click', e => {
-                    e.preventDefault();
-                    state.activeView = link.dataset.view;
-                    render();
-                });
+        // --- 事件監聽 (使用事件代理) ---
+        function setupEventListeners() {
+            appContainer.addEventListener('submit', e => {
+                if (e.target.id === 'auth-form') handleAuthSubmit(e);
+                if (e.target.id === 'add-record-form') handleRecordSubmit(e);
+                if (e.target.id === 'add-task-form') handleTaskSubmit(e);
             });
 
-            // 員工打卡
-            const clockInBtn = document.getElementById('clock-in-btn');
-            if(clockInBtn) {
-                clockInBtn.addEventListener('click', handleClockIn);
-            }
+            appContainer.addEventListener('click', e => {
+                const target = e.target;
+                const navLink = target.closest('.nav-link');
+                if (navLink) {
+                    e.preventDefault();
+                    const view = navLink.dataset.view;
+                    if (state.activeView !== view) {
+                        state.activeView = view;
+                        appContainer.innerHTML = MainLayout(); // Re-render layout to update active link style
+                        renderContent(view); // Fetch and render content for the new view
+                    }
+                    if (window.innerWidth < 768) { // md breakpoint
+                        state.isSidebarOpen = false;
+                        render();
+                        renderContent(state.activeView);
+                    }
+                    return;
+                }
+                if (target.closest('#toggle-sidebar')) {
+                    state.isSidebarOpen = !state.isSidebarOpen;
+                    render();
+                    renderContent(state.activeView);
+                    return;
+                }
+                if (target.closest('#sidebar-backdrop') || target.closest('#signout-btn')) {
+                    if (target.closest('#signout-btn')) handleSignOut();
+                    else {
+                        state.isSidebarOpen = false;
+                        render();
+                        renderContent(state.activeView);
+                    }
+                    return;
+                }
+                if (target.closest('#add-schedule-btn')) showScheduleModal();
+                if (target.closest('#clock-in-btn')) handleClockIn();
+            });
         }
         
+        // --- Modal 相關函式 ---
+        function showScheduleModal() {
+            modalContainer.innerHTML = `
+                <div class="modal-backdrop" id="schedule-modal-backdrop">
+                    <div class="modal-content">
+                        <h3 class="text-xl font-bold mb-4">新增班次</h3>
+                        <form id="schedule-modal-form" class="space-y-4">
+                            <div><label class="block text-sm font-medium">員工</label><select id="schedule-employee" required class="w-full mt-1 p-2 border rounded-md">${state.users.map(u => `<option value="${u.id}|${u.name}">${u.name}</option>`).join('')}</select></div>
+                            <div><label class="block text-sm font-medium">開始時間</label><input type="datetime-local" id="schedule-start" required class="w-full mt-1 p-2 border rounded-md"></div>
+                            <div><label class="block text-sm font-medium">結束時間</label><input type="datetime-local" id="schedule-end" required class="w-full mt-1 p-2 border rounded-md"></div>
+                            <div><label class="block text-sm font-medium">地點</label><input type="text" id="schedule-location" required class="w-full mt-1 p-2 border rounded-md" placeholder="例如：A棟大廳"></div>
+                            <div class="mt-6 flex justify-end space-x-4"><button type="button" id="cancel-schedule-modal" class="px-4 py-2 bg-gray-200 rounded-md">取消</button><button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md">儲存</button></div>
+                        </form>
+                    </div>
+                </div>`;
+            
+            modalContainer.querySelector('#schedule-modal-form').addEventListener('submit', handleScheduleSubmit);
+            modalContainer.querySelector('#cancel-schedule-modal').addEventListener('click', closeModal);
+            modalContainer.querySelector('#schedule-modal-backdrop').addEventListener('click', e => { if (e.target.id === 'schedule-modal-backdrop') closeModal(); });
+        }
+        function closeModal() { modalContainer.innerHTML = ''; }
+
+        // --- 資料處理函式 ---
         async function handleAuthSubmit(e) {
             e.preventDefault();
+            const feedbackEl = document.getElementById('auth-feedback');
+            feedbackEl.textContent = '登入中...';
             state.error = '';
-            const email = document.getElementById('email').value;
+            const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
 
-            if (!/^[a-zA-Z0-9@._-]+$/.test(email)) {
-                state.error = '帳號只能包含英數文字與 @._-';
-                render();
+            if (!username || !password) {
+                feedbackEl.textContent = '請輸入帳號和密碼。';
                 return;
             }
-            
+
             try {
-                if (state.isLoginView) {
-                    await signInWithEmailAndPassword(auth, email, password);
-                } else {
-                    const name = document.getElementById('name').value;
-                    const role = document.getElementById('role').value;
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                    await setDoc(doc(db, `apps/${appId}/users`, userCredential.user.uid), {
-                        name: name,
-                        email: userCredential.user.email,
-                        role: role,
-                        createdAt: serverTimestamp()
-                    });
+                // 1. 根據使用者名稱查詢 Firestore 找到對應的 email
+                const usersRef = collection(db, `apps/${appId}/users`);
+                const q = query(usersRef, where("username", "==", username));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    feedbackEl.textContent = '帳號或密碼錯誤。';
+                    return;
                 }
+
+                // 假設使用者名稱是唯一的
+                const userDoc = querySnapshot.docs[0];
+                const userEmail = userDoc.data().email;
+
+                if (!userEmail) {
+                    console.error("User document is missing email:", userDoc.id);
+                    feedbackEl.textContent = '登入失敗，帳號資料不完整。';
+                    return;
+                }
+
+                // 2. 使用獲取到的 email 和使用者輸入的密碼進行登入
+                await signInWithEmailAndPassword(auth, userEmail, password);
+                // onAuthStateChanged will handle the rest
+
             } catch (error) {
-                console.error(error);
-                if(error.code === 'auth/email-already-in-use') state.error = '此電子郵件已被註冊。';
-                else if(error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') state.error = '帳號或密碼錯誤。';
-                else if(error.code === 'auth/weak-password') state.error = '密碼長度需至少6個字元。';
-                else state.error = '發生錯誤，請稍後再試。';
-                render();
+                console.error("Login error:", error);
+                let message = '登入失敗，請稍後再試。';
+                
+                // 檢查是否為 Firestore 權限錯誤
+                if (error.code === 'permission-denied') {
+                    message = '登入失敗：資料庫權限設定錯誤，請參考程式碼註解更新安全規則。';
+                } 
+                // 檢查是否為 Firebase Auth 的一般錯誤 (例如密碼錯誤)
+                else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                   message = '帳號或密碼錯誤。';
+                }
+                feedbackEl.textContent = message;
             }
         }
-        
-        async function handleSignOut() {
-            try {
-                await signOut(auth);
-            } catch (error) {
-                console.error("Sign out error", error);
-                state.error = '登出時發生錯誤。';
-                render();
-            }
-        }
-        
+        async function handleSignOut() { await signOut(auth); }
         async function handleClockIn() {
             const btn = document.getElementById('clock-in-btn');
-            const btnText = document.getElementById('clock-in-text');
-            const feedbackDiv = document.getElementById('clock-in-feedback');
-            
+            const text = document.getElementById('clock-in-text');
+            const feedback = document.getElementById('clock-in-feedback');
+            if (!btn || !feedback) return;
+
             btn.disabled = true;
-            btnText.textContent = '定位中...';
-            feedbackDiv.innerHTML = '';
+            text.textContent = '定位中...';
+            feedback.textContent = '';
 
             if (!navigator.geolocation) {
-                feedbackDiv.innerHTML = `<p class="text-red-500">您的瀏覽器不支援GPS定位。</p>`;
+                feedback.textContent = '您的瀏覽器不支援定位功能。';
                 btn.disabled = false;
-                btnText.textContent = '簽到打卡';
+                text.textContent = '簽到打卡';
                 return;
             }
 
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const { latitude, longitude } = position.coords;
-                    try {
-                        await addDoc(collection(db, `apps/${appId}/clockIns`), {
-                            userId: state.user.uid,
-                            userName: state.user.name,
-                            timestamp: serverTimestamp(),
-                            type: 'in',
-                            location: { latitude, longitude }
-                        });
-                        feedbackDiv.innerHTML = `<p class="text-green-600 flex items-center">${Icon('check', 'w-5 h-5 mr-2')}打卡成功！時間: ${new Date().toLocaleTimeString()}, 位置: (緯度${latitude.toFixed(4)}, 經度${longitude.toFixed(4)})</p>`;
-                    } catch (e) {
-                        console.error("Error adding document: ", e);
-                        feedbackDiv.innerHTML = `<p class="text-red-500">打卡失敗，無法寫入資料庫。</p>`;
-                    } finally {
-                        btn.disabled = false;
-                        btnText.textContent = '簽到打卡';
-                    }
-                },
-                (err) => {
-                    feedbackDiv.innerHTML = `<p class="text-red-500">GPS定位失敗: ${err.message}</p>`;
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+                });
+
+                const { latitude, longitude } = position.coords;
+                await addDoc(collection(db, `apps/${appId}/clockIns`), {
+                    userId: state.user.uid,
+                    userName: state.user.name,
+                    location: `緯度: ${latitude.toFixed(5)}, 經度: ${longitude.toFixed(5)}`,
+                    timestamp: serverTimestamp()
+                });
+
+                feedback.textContent = `打卡成功！時間：${new Date().toLocaleTimeString()}`;
+                text.textContent = '已簽到';
+                // Keep it disabled for a while to prevent spamming
+                setTimeout(() => {
                     btn.disabled = false;
-                    btnText.textContent = '簽到打卡';
-                }
-            );
+                    text.textContent = '簽到打卡';
+                    feedback.textContent = '';
+                }, 5000);
+
+            } catch (error) {
+                console.error("打卡失敗:", error);
+                if (error.code === 1) feedback.textContent = '定位失敗：請允許存取您的位置。';
+                else if (error.code === 2) feedback.textContent = '定位失敗：無法取得目前位置。';
+                else if (error.code === 3) feedback.textContent = '定位失敗：操作逾時。';
+                else feedback.textContent = '打卡失敗，請稍後再試。';
+                btn.disabled = false;
+                text.textContent = '簽到打卡';
+            }
+        }
+        async function handleScheduleSubmit(e) {
+            e.preventDefault();
+            const [employeeId, employeeName] = document.getElementById('schedule-employee').value.split('|');
+            const startTime = new Date(document.getElementById('schedule-start').value);
+            const endTime = new Date(document.getElementById('schedule-end').value);
+            const location = document.getElementById('schedule-location').value;
+            
+            try {
+                await addDoc(collection(db, `apps/${appId}/schedules`), {
+                    employeeId, employeeName, startTime, endTime, location,
+                    createdAt: serverTimestamp()
+                });
+                closeModal();
+                renderContent('scheduling'); // Re-fetch and render
+            } catch (error) {
+                console.error("新增班次失敗:", error);
+                state.error = "新增班次失敗";
+                render(); // show global error
+            }
+        }
+        async function handleRecordSubmit(e) {
+            e.preventDefault();
+            const [employeeId, employeeName] = document.getElementById('record-employee').value.split('|');
+            const type = document.getElementById('record-type').value;
+            const reason = document.getElementById('record-reason').value;
+            const points = Number(document.getElementById('record-points').value);
+            try {
+                await addDoc(collection(db, `apps/${appId}/records`), {
+                    employeeId, employeeName, type, reason, points, 
+                    recordedBy: state.user.name,
+                    timestamp: serverTimestamp()
+                });
+                e.target.reset(); // Clear form
+                renderContent('records'); // Re-fetch and render
+            } catch (error) {
+                console.error("新增獎懲失敗:", error);
+                state.error = "新增獎懲失敗";
+                render();
+            }
+        }
+        async function handleTaskSubmit(e) {
+            e.preventDefault();
+            const [employeeId, employeeName] = document.getElementById('task-employee').value.split('|');
+            const title = document.getElementById('task-title').value;
+            try {
+                await addDoc(collection(db, `apps/${appId}/tasks`), {
+                    employeeId, employeeName, title,
+                    status: 'pending', // pending, completed
+                    createdBy: state.user.name,
+                    timestamp: serverTimestamp()
+                });
+                e.target.reset();
+                renderContent('tasks');
+            } catch (error) { 
+                console.error("新增任務失敗:", error); 
+                state.error = "新增任務失敗"; 
+                render(); 
+            }
         }
 
-        async function fetchUsersForManagement() {
-             try {
-                const usersCollectionRef = collection(db, `apps/${appId}/users`);
-                const querySnapshot = await getDocs(usersCollectionRef);
-                state.usersForManagement = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (error) {
-                console.error("Error fetching users:", error);
-                state.error = "無法讀取使用者列表";
-            } finally {
-                // re-render the content area
-                document.getElementById('main-content').innerHTML = UserManagement();
-            }
+        // --- 資料獲取函式 (不再觸發 render) ---
+        async function fetchAllUsers() {
+            try {
+                const querySnapshot = await getDocs(collection(db, `apps/${appId}/users`));
+                state.users = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (error) { console.error("獲取使用者列表失敗:", error); state.error = "無法讀取使用者列表。"; }
+        }
+        async function fetchSchedules() {
+            try {
+                const q = query(collection(db, `apps/${appId}/schedules`), orderBy('startTime', 'desc'));
+                const querySnapshot = await getDocs(q);
+                state.schedules = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (error) { console.error("獲取排班資料失敗:", error); state.error = "無法讀取排班資料。";}
+        }
+        async function fetchRecords() {
+            try {
+                const q = query(collection(db, `apps/${appId}/records`), orderBy('timestamp', 'desc'));
+                const querySnapshot = await getDocs(q);
+                state.records = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (error) { console.error("獲取獎懲資料失敗:", error); state.error = "無法讀取獎懲資料。"; }
+        }
+        async function fetchTasks() {
+            try {
+                const q = query(collection(db, `apps/${appId}/tasks`), orderBy('timestamp', 'desc'));
+                const querySnapshot = await getDocs(q);
+                state.tasks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (error) { console.error("獲取任務資料失敗:", error); state.error = "無法讀取任務資料。"; }
         }
 
         // --- 初始化應用程式 ---
         onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
-                try {
-                    const userDocRef = doc(db, `apps/${appId}/users`, firebaseUser.uid);
-                    const userDocSnap = await getDoc(userDocRef);
-                    if (userDocSnap.exists()) {
-                        state.user = { uid: firebaseUser.uid, email: firebaseUser.email, ...userDocSnap.data() };
-                    } else {
-                        state.user = { uid: firebaseUser.uid, email: firebaseUser.email, role: 'Employee', name: '新用戶' };
-                    }
-                } catch (dbError) {
-                     console.error("Error fetching user data:", dbError);
-                     state.error = "無法讀取使用者資料。請檢查 Firestore 安全規則。";
-                     state.user = null;
+                const userDocRef = doc(db, `apps/${appId}/users`, firebaseUser.uid);
+                const userDocSnap = await getDoc(userDocRef);
+                if (userDocSnap.exists()) {
+                    state.user = { uid: firebaseUser.uid, email: firebaseUser.email, ...userDocSnap.data() };
+                } else {
+                    // Fallback for users that might exist in Auth but not in Firestore
+                    state.user = { uid: firebaseUser.uid, email: firebaseUser.email, role: 'Employee', name: '新用戶' };
                 }
             } else {
                 state.user = null;
             }
             state.loading = false;
             render();
+            if (state.user) {
+                renderContent(state.activeView);
+            }
         });
+
+        // 啟動事件監聽
+        setupEventListeners();
 
     </script>
 </body>
