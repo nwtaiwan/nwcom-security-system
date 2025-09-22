@@ -3,467 +3,508 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>西北社區財務系統</title>
+    <title>西北保全勤務管理系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* 自訂樣式，用於設定面板的顯示和隱藏動畫 */
-        .modal {
-            display: none;
-            transition: opacity 0.3s ease-in-out;
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
         }
-        .modal.active {
-            display: flex;
+        .modal {
+            transition: opacity 0.3s ease;
         }
         .modal-content {
-            transform: scale(0.9);
-            transition: transform 0.3s ease-in-out;
+            transition: transform 0.3s ease;
         }
-        .modal.active .modal-content {
-            transform: scale(1);
+        /* For loading spinner */
+        .loader {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
         }
-        /* 美化捲軸 */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #555;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
-<body class="bg-red-600 flex items-center justify-center h-screen font-sans">
+<body class="bg-gray-100 text-gray-800">
 
-    <!-- 主登入畫面 -->
-    <div class="w-full max-w-md p-4 space-y-3 bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl text-center">
-        <img src="https://static.wixstatic.com/media/6148f9_56377cef73c1498f95a2c3057b89f2ed~mv2.png" alt="社區Logo" class="w-[120px] h-[60px] mx-auto mb-2">
-        
-        <div class="text-center">
-             <span id="communityNameDisplay" class="block text-[20px] font-bold text-red-600">西北社區</span>
-             <span class="block text-[20px] text-gray-800">財務系統</span>
-        </div>
-        
-        <!-- 登入表單 -->
-        <form id="loginForm" class="space-y-4 text-left">
-            <div>
-                 <div class="flex justify-between items-center mb-1">
-                    <label for="username" class="text-base font-medium text-gray-700">帳號</label>
-                    <div class="flex items-center text-base">
-                        <input id="rememberMe" name="rememberMe" type="checkbox" class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded">
-                        <label for="rememberMe" class="ml-2 text-gray-700">記住帳號</label>
-                    </div>
-                </div>
-                <input id="username" name="username" type="text" required class="text-base block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="請輸入您的帳號">
-            </div>
-            <div>
-                <label for="password" class="text-base font-medium text-gray-700">密碼</label>
-                <div class="relative mt-1">
-                    <input id="password" name="password" type="password" required class="text-base block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 pr-10" placeholder="請輸入您的密碼">
-                    <button type="button" id="togglePasswordVisibility" class="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-gray-700 cursor-pointer">
-                        <svg id="eyeIcon" class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                        </svg>
-                        <svg id="eyeOffIcon" class="h-5 w-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064 7 9.542 7 .847 0 1.673.124 2.458.352M4.935 4.935l14.13 14.13M10.5 10.5a2.5 2.5 0 003.536 3.536"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            <button type="submit" class="w-full flex justify-center py-2 px-3 border border-transparent rounded-lg shadow-lg text-base font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-150 ease-in-out">
-                登入
-            </button>
-        </form>
-        <div id="loginMessage" class="text-center text-red-500 font-medium h-4"></div>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+        <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mb-4"></div>
+        <h2 class="text-xl font-semibold text-gray-700">系統載入中...</h2>
+        <p class="text-gray-500">正在連接至 Firebase 服務</p>
     </div>
 
-    <!-- 左下角設定按鈕 -->
-    <button id="settingsButton" class="fixed bottom-0 left-0 w-[10px] h-[10px] bg-transparent cursor-pointer" title="開啟設定"></button>
+    <!-- Login Screen -->
+    <div id="login-screen" class="hidden min-h-screen flex items-center justify-center bg-gray-50">
+        <div class="max-w-md w-full bg-white p-8 rounded-xl shadow-lg">
+            <h2 class="text-3xl font-bold text-center text-gray-800 mb-2">西北保全勤務管理系統</h2>
+            <p class="text-center text-gray-500 mb-8">請登入以繼續</p>
+            
+            <!-- Placeholder for login form. We will use anonymous/custom token auth -->
+            <div class="text-center">
+                <p id="auth-status" class="text-lg text-blue-600">正在進行身分驗證...</p>
+                <p class="text-sm text-gray-500 mt-4">系統將自動為您登入。如果長時間沒有回應，請重新整理頁面。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Screen -->
+    <div id="app-screen" class="hidden">
+        <header class="bg-white shadow-md">
+            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-gray-900">西北保全勤務管理系統</h1>
+                <div class="flex items-center space-x-4">
+                    <div class="text-right">
+                        <p id="user-role" class="text-sm font-semibold text-indigo-600"></p>
+                        <p id="user-id" class="text-xs text-gray-500"></p>
+                    </div>
+                     <button id="logout-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition">登出</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <!-- Manager View -->
+            <div id="manager-view" class="hidden">
+                <div class="px-4 py-6 sm:p-6 bg-white rounded-xl shadow">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">管理員儀表板</h2>
+                         <button id="add-event-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition shadow-sm">登錄獎懲事件</button>
+                    </div>
+                    <div class="mb-6">
+                        <label for="community-select" class="block text-sm font-medium text-gray-700">選擇管理的社區</label>
+                        <select id="community-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-medium mb-2" id="employee-list-title">社區員工列表</h3>
+                        <div id="employee-list" class="space-y-3">
+                            <!-- Employee cards will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Employee View -->
+            <div id="employee-view" class="hidden">
+                <div class="px-4 py-6 sm:p-6 bg-white rounded-xl shadow">
+                    <h2 class="text-xl font-semibold mb-4">我的儀表板</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-indigo-50 p-6 rounded-lg text-center">
+                            <h3 class="text-lg font-medium text-indigo-800">目前考核總分</h3>
+                            <p id="employee-score" class="text-5xl font-bold text-indigo-600 mt-2">--</p>
+                        </div>
+                        <div class="bg-green-50 p-6 rounded-lg text-center">
+                             <h3 class="text-lg font-medium text-green-800">本月獎勵次數</h3>
+                             <p id="employee-rewards-count" class="text-5xl font-bold text-green-600 mt-2">--</p>
+                        </div>
+                         <div class="bg-red-50 p-6 rounded-lg text-center">
+                             <h3 class="text-lg font-medium text-red-800">本月懲處次數</h3>
+                             <p id="employee-penalties-count" class="text-5xl font-bold text-red-600 mt-2">--</p>
+                        </div>
+                    </div>
+                    <div class="mt-8">
+                        <h3 class="text-lg font-medium mb-2">近期獎懲記錄</h3>
+                        <div id="employee-events" class="space-y-2 max-h-96 overflow-y-auto pr-2">
+                             <!-- Employee event items will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin View -->
+            <div id="admin-view" class="hidden">
+                 <div class="px-4 py-6 sm:p-6 bg-white rounded-xl shadow">
+                    <h2 class="text-xl font-semibold mb-4">系統管理員面板</h2>
+                    <p class="text-gray-600">此處為系統管理功能區，例如：帳號管理、社區設定、獎懲項目設定等。</p>
+                    <p class="text-gray-500 mt-2 text-sm">(此為原型展示，後台功能需在Web管理介面完整開發)</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
     
-    <!-- 設定密碼驗證 Modal -->
-    <div id="settingsPasswordModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
-        <div class="modal-content bg-white rounded-xl shadow-xl w-full max-w-sm">
-            <div class="p-4 border-b">
-                <h2 class="text-xl font-bold text-gray-800">管理員驗證</h2>
-            </div>
-            <div class="p-4">
-                <form id="settingsPasswordForm">
-                    <label for="settingsPassword" class="text-sm font-medium text-gray-700">請輸入管理密碼</label>
-                    <input type="password" id="settingsPassword" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                    <div id="passwordErrorMessage" class="text-red-500 text-sm h-4 mt-1"></div>
-                    <div class="mt-4 flex justify-end space-x-2">
-                         <button type="button" id="closePasswordModalButton" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition">取消</button>
-                        <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition">確認</button>
+    <!-- Add Event Modal -->
+    <div id="add-event-modal" class="modal hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-20">
+        <div class="modal-content relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <form id="add-event-form">
+                <h3 class="text-xl font-semibold mb-4">登錄獎懲事件</h3>
+                <div class="space-y-4">
+                     <div>
+                        <label for="event-employee-select" class="block text-sm font-medium text-gray-700">選擇員工</label>
+                        <select id="event-employee-select" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
                     </div>
-                </form>
-            </div>
+                     <div>
+                        <label class="block text-sm font-medium text-gray-700">事件類型</label>
+                        <div class="mt-2 flex space-x-4">
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="event-type" value="reward" class="form-radio text-indigo-600" checked>
+                                <span class="ml-2">獎勵</span>
+                            </label>
+                             <label class="inline-flex items-center">
+                                <input type="radio" name="event-type" value="penalty" class="form-radio text-red-600">
+                                <span class="ml-2">懲處</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="event-description" class="block text-sm font-medium text-gray-700">事由描述</label>
+                        <textarea id="event-description" rows="3" required class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"></textarea>
+                    </div>
+                     <div>
+                        <label for="event-points" class="block text-sm font-medium text-gray-700">分數 (+/-)</label>
+                        <input type="number" id="event-points" required class="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" id="cancel-event-button" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition">取消</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition">確認送出</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <!-- 設定面板 (Modal) -->
-    <div id="settingsModal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
-        <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-            <div class="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 class="text-2xl font-bold text-gray-800">基本設定</h2>
-                <button id="closeModalButton" class="text-gray-400 hover:text-gray-600 transition">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <div class="px-6 pb-6 pt-5 flex-grow overflow-y-auto space-y-4">
-                <!-- 訊息提示 -->
-                <div id="settingsMessage" class="mb-2 text-center text-green-600 font-medium h-5"></div>
 
-                 <!-- 社區名稱設定 -->
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">社區名稱設定</h3>
-                    <div class="flex flex-wrap gap-4 items-end">
-                        <div class="flex-grow">
-                            <label for="communityNameInput" class="text-sm font-medium text-gray-700">新名稱</label>
-                            <input type="text" id="communityNameInput" placeholder="例如：西北社區" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                        </div>
-                        <div class="flex-shrink-0">
-                            <button id="saveCommunityNameButton" class="w-full sm:w-auto flex-shrink-0 px-5 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition">儲存名稱</button>
-                        </div>
-                    </div>
-                </div>
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            onAuthStateChanged, 
+            signInAnonymously,
+            signInWithCustomToken,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            getDoc, 
+            getDocs,
+            addDoc,
+            query, 
+            where,
+            onSnapshot,
+            serverTimestamp,
+            orderBy
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-                <!-- 帳號管理 -->
-                <div class="bg-gray-50 p-4 rounded-lg">
-                    <h3 class="text-lg font-semibold text-gray-700 mb-2">帳號管理</h3>
-                    
-                    <!-- 新增/編輯帳號表單 -->
-                    <form id="accountForm" class="mb-4 flex flex-wrap gap-4 items-end">
-                        <input type="hidden" id="editUserId">
-                        <div class="flex-grow" style="flex-basis: 12rem;">
-                            <label for="accountUsername" class="text-sm font-medium text-gray-700">帳號</label>
-                            <input type="text" id="accountUsername" placeholder="新帳號" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                        </div>
-                        <div class="flex-grow" style="flex-basis: 12rem;">
-                            <label for="accountPassword" class="text-sm font-medium text-gray-700">密碼</label>
-                            <input type="text" id="accountPassword" placeholder="新密碼" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                        </div>
-                        <div class="flex-grow" style="flex-basis: 12rem;">
-                            <label for="accountRedirectUrl" class="text-sm font-medium text-gray-700">代碼</label>
-                            <div class="flex items-center mt-1">
-                                <input type="text" id="accountRedirectUrl" placeholder="請輸入代碼" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-2 w-full sm:w-auto">
-                            <button type="submit" id="accountFormSubmitButton" class="w-full sm:w-auto flex-shrink-0 px-5 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition">新增帳號</button>
-                            <button type="button" id="cancelEditButton" class="hidden w-full sm:w-auto flex-shrink-0 px-5 py-2 bg-gray-400 text-white rounded-md hover:bg-gray-500 transition">取消編輯</button>
-                        </div>
-                    </form>
-                    
-                    <!-- 帳號列表 -->
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full bg-white border border-gray-200 rounded-lg">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">帳號</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">密碼</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">代碼</th>
-                                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="userList" class="divide-y divide-gray-200">
-                                <!-- 使用 JavaScript 動態填入 -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+        // --- Firebase Configuration ---
+        // IMPORTANT: Replace with your actual Firebase project configuration.
+        // This is a placeholder configuration.
+        const firebaseConfig = {
+    apiKey: "AIzaSyAUWD4qFvV88umGvzyozFuyo7WhT6QidsU",
+    authDomain: "nwcom-security-system.firebaseapp.com",
+    projectId: "nwcom-security-system",
+    storageBucket: "nwcom-security-system.firebasestorage.app",
+    messagingSenderId: "439911862368",
+    appId: "1:439911862368:web:64dd8bf7a8e44d81687305",
+    measurementId: "G-H8GLDCW27X"
+  };
+        
+        // Use environment variables if available (for Canvas environment)
+        const finalFirebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // DOM 元素
-            const loginForm = document.getElementById('loginForm');
-            const loginMessage = document.getElementById('loginMessage');
-            const usernameInput = document.getElementById('username');
-            const passwordInput = document.getElementById('password');
-            const rememberMeCheckbox = document.getElementById('rememberMe');
-            const togglePasswordVisibilityButton = document.getElementById('togglePasswordVisibility');
-            const eyeIcon = document.getElementById('eyeIcon');
-            const eyeOffIcon = document.getElementById('eyeOffIcon');
-            const communityNameDisplay = document.getElementById('communityNameDisplay');
-            
-            const settingsButton = document.getElementById('settingsButton');
-            const settingsModal = document.getElementById('settingsModal');
-            const closeModalButton = document.getElementById('closeModalButton');
-            
-            const settingsPasswordModal = document.getElementById('settingsPasswordModal');
-            const settingsPasswordForm = document.getElementById('settingsPasswordForm');
-            const settingsPasswordInput = document.getElementById('settingsPassword');
-            const passwordErrorMessage = document.getElementById('passwordErrorMessage');
-            const closePasswordModalButton = document.getElementById('closePasswordModalButton');
+        // --- Initialize Firebase ---
+        const app = initializeApp(finalFirebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-            const settingsMessage = document.getElementById('settingsMessage');
-            const communityNameInput = document.getElementById('communityNameInput');
-            const saveCommunityNameButton = document.getElementById('saveCommunityNameButton');
+        // --- Global State ---
+        let currentUser = null;
+        let currentUserData = null;
+        let unsubscribeListeners = []; // To store snapshot listeners for cleanup
 
-            const accountForm = document.getElementById('accountForm');
-            const accountUsernameInput = document.getElementById('accountUsername');
-            const accountPasswordInput = document.getElementById('accountPassword');
-            const accountRedirectUrlInput = document.getElementById('accountRedirectUrl');
-            const accountFormSubmitButton = document.getElementById('accountFormSubmitButton');
-            const editUserIdInput = document.getElementById('editUserId');
-            const cancelEditButton = document.getElementById('cancelEditButton');
-            const userList = document.getElementById('userList');
+        // --- UI Elements ---
+        const loadingScreen = document.getElementById('loading-screen');
+        const loginScreen = document.getElementById('login-screen');
+        const appScreen = document.getElementById('app-screen');
+        const authStatus = document.getElementById('auth-status');
+        const logoutButton = document.getElementById('logout-button');
+        
+        const managerView = document.getElementById('manager-view');
+        const employeeView = document.getElementById('employee-view');
+        const adminView = document.getElementById('admin-view');
 
-            // --- 資料管理 ---
-            const USERS_KEY = 'loginSystem_users';
-            const REMEMBERED_USER_KEY = 'loginSystem_rememberedUser';
-            const COMMUNITY_NAME_KEY = 'loginSystem_communityName';
-            const URL_PREFIX = 'https://nwtaiwan.github.io/';
-
-            // 取得使用者資料，若無則初始化
-            let users = JSON.parse(localStorage.getItem(USERS_KEY)) || [];
-            if (users.length === 0) {
-                // 如果是第一次使用，建立一個預設帳號
-                users.push({ 
-                    id: Date.now(), 
-                    username: 'admin', 
-                    password: 'password',
-                    redirectUrl: 'https://nwtaiwan.github.io/default'
-                });
-                saveUsers();
-            }
-
-            function saveUsers() {
-                localStorage.setItem(USERS_KEY, JSON.stringify(users));
-            }
-
-            // --- 社區名稱邏輯 ---
-            function loadCommunityName() {
-                const savedName = localStorage.getItem(COMMUNITY_NAME_KEY) || '西北社區';
-                communityNameDisplay.textContent = savedName;
-                communityNameInput.value = savedName;
-                document.title = savedName + '財務系統';
-            }
-            
-            saveCommunityNameButton.addEventListener('click', () => {
-                const newName = communityNameInput.value.trim();
-                if (newName) {
-                    localStorage.setItem(COMMUNITY_NAME_KEY, newName);
-                    loadCommunityName();
-                    showSettingsMessage('社區名稱已更新！');
-                } else {
-                    showSettingsMessage('社區名稱不能為空！', 'error');
-                }
-            });
-
-            // --- 記住帳號邏輯 ---
-            function loadRememberedUser() {
-                const rememberedUsername = localStorage.getItem(REMEMBERED_USER_KEY);
-                if (rememberedUsername) {
-                    usernameInput.value = rememberedUsername;
-                    rememberMeCheckbox.checked = true;
-                }
-            }
-
-            function handleRememberMe(username) {
-                if (rememberMeCheckbox.checked) {
-                    localStorage.setItem(REMEMBERED_USER_KEY, username);
-                } else {
-                    localStorage.removeItem(REMEMBERED_USER_KEY);
-                }
-            }
-
-            // --- 密碼可視性切換 ---
-            togglePasswordVisibilityButton.addEventListener('click', () => {
-                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                passwordInput.setAttribute('type', type);
-                eyeIcon.classList.toggle('hidden');
-                eyeOffIcon.classList.toggle('hidden');
-            });
-
-            // --- 登入邏輯 ---
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const username = e.target.username.value;
-                const password = e.target.password.value;
-                handleRememberMe(username);
-                const user = users.find(u => u.username === username && u.password === password);
-                if (user) {
-                    loginMessage.textContent = '登入成功！正在跳轉...';
-                    loginMessage.classList.remove('text-red-500');
-                    loginMessage.classList.add('text-green-500');
-                    setTimeout(() => {
-                        window.location.href = user.redirectUrl;
-                    }, 1000);
-                } else {
-                    loginMessage.textContent = '帳號或密碼錯誤！';
-                    loginMessage.classList.remove('text-green-500');
-                    loginMessage.classList.add('text-red-500');
-                }
-            });
-
-            // --- 設定面板 & 密碼驗證邏輯 ---
-            settingsButton.addEventListener('click', () => {
-                settingsPasswordModal.classList.add('active');
-                settingsPasswordInput.focus();
-            });
-
-            function closePasswordModal() {
-                settingsPasswordModal.classList.remove('active');
-                settingsPasswordForm.reset();
-                passwordErrorMessage.textContent = '';
-            }
-            
-            closePasswordModalButton.addEventListener('click', closePasswordModal);
-
-            settingsPasswordForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const today = new Date();
-                const year = today.getFullYear();
-                const month = String(today.getMonth() + 1).padStart(2, '0');
-                const day = String(today.getDate()).padStart(2, '0');
-                const correctPassword = `${year}${month}${day}0217`;
-
-                if (settingsPasswordInput.value === correctPassword) {
-                    closePasswordModal();
-                    settingsModal.classList.add('active');
-                    renderUserList();
-                } else {
-                    passwordErrorMessage.textContent = '密碼錯誤！';
-                }
-            });
-            
-            closeModalButton.addEventListener('click', () => {
-                settingsModal.classList.remove('active');
-            });
-
-            // --- 帳號管理邏輯 ---
-            function renderUserList() {
-                userList.innerHTML = '';
-                if(users.length === 0) {
-                    userList.innerHTML = `<tr><td colspan="4" class="text-center p-4 text-gray-500">目前沒有任何帳號</td></tr>`;
-                    return;
-                }
-                users.forEach(user => {
-                    const tr = document.createElement('tr');
-                    const displayUrl = user.redirectUrl.startsWith(URL_PREFIX) 
-                        ? user.redirectUrl.substring(URL_PREFIX.length) 
-                        : user.redirectUrl;
-
-                    tr.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${escapeHTML(user.username)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${escapeHTML(user.password)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-xs truncate">
-                            ${escapeHTML(displayUrl)}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium space-x-2">
-                            <button class="edit-btn text-indigo-600 hover:text-indigo-900" data-id="${user.id}">編輯</button>
-                            <button class="delete-btn text-red-600 hover:text-red-900" data-id="${user.id}">刪除</button>
-                        </td>
-                    `;
-                    userList.appendChild(tr);
-                });
-            }
-
-            accountForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const username = accountUsernameInput.value.trim();
-                const password = accountPasswordInput.value.trim();
-                const urlSuffix = accountRedirectUrlInput.value.trim();
-                const userId = editUserIdInput.value;
-
-                if (!username || !password || !urlSuffix) {
-                    showSettingsMessage('帳號、密碼和代碼不能為空！', 'error');
-                    return;
-                }
+        const addEventModal = document.getElementById('add-event-modal');
+        const addEventButton = document.getElementById('add-event-button');
+        const cancelEventButton = document.getElementById('cancel-event-button');
+        const addEventForm = document.getElementById('add-event-form');
+        
+        // --- Authentication ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                authStatus.textContent = '登入成功！正在讀取使用者資料...';
                 
-                const redirectUrl = URL_PREFIX + urlSuffix;
+                // Fetch user data from Firestore
+                const userDocRef = doc(db, `users`, user.uid);
+                const userDocSnap = await getDoc(userDocRef);
 
-                if (userId) { // 編輯模式
-                    const userIndex = users.findIndex(u => u.id == userId);
-                    if (userIndex > -1) {
-                        if (users.some(u => u.username === username && u.id != userId)) {
-                            showSettingsMessage('此帳號名稱已被使用！', 'error'); return;
-                        }
-                        users[userIndex] = { ...users[userIndex], username, password, redirectUrl };
-                        showSettingsMessage('帳號更新成功！');
-                    }
-                } else { // 新增模式
-                    if (users.some(u => u.username === username)) {
-                        showSettingsMessage('此帳號名稱已被使用！', 'error'); return;
-                    }
-                    users.push({ id: Date.now(), username, password, redirectUrl });
-                    showSettingsMessage('帳號新增成功！');
+                if (userDocSnap.exists()) {
+                    currentUserData = userDocSnap.data();
+                    initializeAppUI();
+                    
+                    loginScreen.classList.add('hidden');
+                    appScreen.classList.remove('hidden');
+                } else {
+                    console.error("User document not found in Firestore!");
+                    authStatus.textContent = '錯誤：找不到您的使用者設定檔。';
                 }
-
-                saveUsers();
-                renderUserList();
-                resetAccountForm();
-            });
-            
-            userList.addEventListener('click', (e) => {
-                const target = e.target;
-                const id = target.dataset.id;
+                loadingScreen.classList.add('hidden');
+            } else {
+                currentUser = null;
+                currentUserData = null;
+                cleanupListeners(); // Clean up listeners on logout
                 
-                if (target.classList.contains('edit-btn')) {
-                    const user = users.find(u => u.id == id);
-                    if (user) {
-                        editUserIdInput.value = user.id;
-                        accountUsernameInput.value = user.username;
-                        accountPasswordInput.value = user.password;
-                        let suffix = user.redirectUrl;
-                        if(suffix.startsWith(URL_PREFIX)) {
-                           suffix = suffix.substring(URL_PREFIX.length);
-                        }
-                        accountRedirectUrlInput.value = suffix;
-                        accountFormSubmitButton.textContent = '更新帳號';
-                        accountFormSubmitButton.classList.remove('bg-green-500', 'hover:bg-green-600');
-                        accountFormSubmitButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
-                        cancelEditButton.classList.remove('hidden');
-                        accountUsernameInput.focus();
+                appScreen.classList.add('hidden');
+                loginScreen.classList.remove('hidden');
+                loadingScreen.classList.add('hidden');
+                
+                // Automatically try to sign in
+                try {
+                    authStatus.textContent = '正在自動登入...';
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
                     }
-                } else if (target.classList.contains('delete-btn')) {
-                    if (confirm(`確定要刪除這個帳號嗎？`)) {
-                        users = users.filter(u => u.id != id);
-                        saveUsers();
-                        renderUserList();
-                        resetAccountForm();
-                        showSettingsMessage('帳號已刪除！');
-                    }
+                } catch (error) {
+                    console.error("Authentication failed: ", error);
+                    authStatus.textContent = `登入失敗: ${error.message}`;
                 }
-            });
-
-            cancelEditButton.addEventListener('click', resetAccountForm);
-
-            function resetAccountForm() {
-                accountForm.reset();
-                editUserIdInput.value = '';
-                accountFormSubmitButton.textContent = '新增帳號';
-                accountFormSubmitButton.classList.remove('bg-blue-500', 'hover:bg-blue-600');
-                accountFormSubmitButton.classList.add('bg-green-500', 'hover:bg-green-600');
-                cancelEditButton.classList.add('hidden');
             }
-
-            function showSettingsMessage(message, type = 'success') {
-                settingsMessage.textContent = message;
-                settingsMessage.className = `mb-2 text-center font-medium h-5 ${type === 'error' ? 'text-red-500' : 'text-green-600'}`;
-                setTimeout(() => { settingsMessage.textContent = ''; }, 3000);
-            }
-            
-            function escapeHTML(str) {
-                const p = document.createElement('p');
-                p.textContent = str;
-                return p.innerHTML;
-            }
-            
-            // 初始化
-            loadCommunityName();
-            loadRememberedUser();
         });
+        
+        logoutButton.addEventListener('click', () => {
+             signOut(auth);
+        });
+
+        // --- UI Initialization ---
+        function initializeAppUI() {
+            document.getElementById('user-id').textContent = `ID: ${currentUser.uid}`;
+            
+            // Hide all views first
+            managerView.classList.add('hidden');
+            employeeView.classList.add('hidden');
+            adminView.classList.add('hidden');
+
+            // Show view based on role
+            switch(currentUserData.role) {
+                case 'admin':
+                    adminView.classList.remove('hidden');
+                    document.getElementById('user-role').textContent = '系統管理員';
+                    break;
+                case 'manager':
+                case 'junior_manager':
+                    managerView.classList.remove('hidden');
+                    const roleText = currentUserData.role === 'manager' ? '高階管理者' : '初階管理者';
+                    document.getElementById('user-role').textContent = roleText;
+                    loadManagerData();
+                    break;
+                case 'employee':
+                    employeeView.classList.remove('hidden');
+                    document.getElementById('user-role').textContent = '員工';
+                    loadEmployeeData();
+                    break;
+                default:
+                    console.error("Unknown user role:", currentUserData.role);
+            }
+        }
+        
+        // --- Manager View Logic ---
+        async function loadManagerData() {
+            const communitySelect = document.getElementById('community-select');
+            communitySelect.innerHTML = '';
+            
+            const managedCommunities = currentUserData.managedCommunities || [];
+            if (managedCommunities.length === 0) {
+                 communitySelect.innerHTML = '<option>未指派任何社區</option>';
+                 return;
+            }
+
+            for (const communityId of managedCommunities) {
+                const communityDoc = await getDoc(doc(db, "communities", communityId));
+                if (communityDoc.exists()) {
+                    const option = document.createElement('option');
+                    option.value = communityId;
+                    option.textContent = communityDoc.data().name;
+                    communitySelect.appendChild(option);
+                }
+            }
+
+            communitySelect.addEventListener('change', (e) => {
+                loadEmployeesForCommunity(e.target.value);
+            });
+            
+            // Load employees for the first community by default
+            loadEmployeesForCommunity(managedCommunities[0]);
+        }
+
+        function loadEmployeesForCommunity(communityId) {
+            cleanupListeners(); // Unsubscribe from previous community's listeners
+            
+            const q = query(collection(db, "users"), where("assignedCommunityId", "==", communityId), where("role", "==", "employee"));
+            const employeeList = document.getElementById('employee-list');
+            
+            const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                employeeList.innerHTML = ''; // Clear previous list
+                 if(querySnapshot.empty) {
+                     employeeList.innerHTML = `<p class="text-gray-500">此社區尚無員工資料。</p>`;
+                     return;
+                 }
+                querySnapshot.forEach(async (doc) => {
+                    const employee = doc.data();
+                    const employeeId = doc.id;
+                    
+                    // Fetch latest assessment score
+                    const assessmentDoc = await getDoc(doc(db, 'assessments', employeeId));
+                    const score = assessmentDoc.exists() ? assessmentDoc.data().currentScore : 'N/A';
+
+                    const card = document.createElement('div');
+                    card.className = 'p-4 border rounded-lg flex justify-between items-center bg-gray-50';
+                    card.innerHTML = `
+                        <div>
+                            <p class="font-semibold">${employee.name}</p>
+                            <p class="text-sm text-gray-500">${employee.email}</p>
+                        </div>
+                        <div class="text-right">
+                             <p class="text-lg font-bold">${score}</p>
+                             <p class="text-xs text-gray-500">考核分數</p>
+                        </div>
+                    `;
+                    employeeList.appendChild(card);
+                });
+            });
+            unsubscribeListeners.push(unsubscribe); // Store the listener for cleanup
+        }
+
+
+        // --- Employee View Logic ---
+        function loadEmployeeData() {
+             cleanupListeners();
+             const employeeId = currentUser.uid;
+             const assessmentRef = doc(db, 'assessments', employeeId);
+
+             const unsubAssessment = onSnapshot(assessmentRef, (doc) => {
+                 const scoreEl = document.getElementById('employee-score');
+                 if (doc.exists()) {
+                     scoreEl.textContent = doc.data().currentScore;
+                 } else {
+                     scoreEl.textContent = 0; // Default score
+                 }
+             });
+             unsubscribeListeners.push(unsubAssessment);
+             
+             // Listen for events
+             const eventsRef = collection(db, 'events');
+             // Get start of current month
+             const now = new Date();
+             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+             const q = query(eventsRef, where("userId", "==", employeeId), where("timestamp", ">=", startOfMonth), orderBy("timestamp", "desc"));
+             const unsubEvents = onSnapshot(q, (snapshot) => {
+                 const eventsContainer = document.getElementById('employee-events');
+                 eventsContainer.innerHTML = '';
+                 let rewards = 0;
+                 let penalties = 0;
+                 
+                 if (snapshot.empty) {
+                    eventsContainer.innerHTML = `<p class="text-gray-500 p-4 text-center">本月無任何記錄。</p>`;
+                 }
+
+                 snapshot.forEach(doc => {
+                     const event = doc.data();
+                     const isReward = event.points > 0;
+                     if(isReward) rewards++; else penalties++;
+
+                     const eventDate = event.timestamp.toDate().toLocaleDateString();
+                     
+                     const item = document.createElement('div');
+                     item.className = `p-3 rounded-md flex justify-between items-center ${isReward ? 'bg-green-100' : 'bg-red-100'}`;
+                     item.innerHTML = `
+                        <div>
+                             <p class="font-medium ${isReward ? 'text-green-800' : 'text-red-800'}">${event.description}</p>
+                             <p class="text-xs text-gray-600">${eventDate} - 由 ${event.submittedByName} 登錄</p>
+                        </div>
+                        <p class="text-lg font-bold ${isReward ? 'text-green-600' : 'text-red-600'}">${event.points > 0 ? '+' : ''}${event.points}</p>
+                     `;
+                     eventsContainer.appendChild(item);
+                 });
+
+                 document.getElementById('employee-rewards-count').textContent = rewards;
+                 document.getElementById('employee-penalties-count').textContent = penalties;
+             });
+             unsubscribeListeners.push(unsubEvents);
+        }
+
+        // --- Modal Logic ---
+        addEventButton.addEventListener('click', async () => {
+            const communityId = document.getElementById('community-select').value;
+            const employeeSelect = document.getElementById('event-employee-select');
+            employeeSelect.innerHTML = ''; // Clear options
+
+            if(communityId) {
+                 const q = query(collection(db, "users"), where("assignedCommunityId", "==", communityId), where("role", "==", "employee"));
+                 const querySnapshot = await getDocs(q);
+                 querySnapshot.forEach(doc => {
+                     const option = document.createElement('option');
+                     option.value = doc.id;
+                     option.textContent = doc.data().name;
+                     employeeSelect.appendChild(option);
+                 });
+            }
+            addEventModal.classList.remove('hidden');
+        });
+        
+        cancelEventButton.addEventListener('click', () => {
+            addEventModal.classList.add('hidden');
+            addEventForm.reset();
+        });
+
+        addEventForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const employeeId = document.getElementById('event-employee-select').value;
+            const eventType = document.querySelector('input[name="event-type"]:checked').value;
+            const description = document.getElementById('event-description').value;
+            let points = parseInt(document.getElementById('event-points').value);
+
+            if (eventType === 'penalty' && points > 0) {
+                points = -points;
+            }
+            if (eventType === 'reward' && points < 0) {
+                points = Math.abs(points);
+            }
+
+            try {
+                // Add event document. The Cloud Function will handle the score update.
+                await addDoc(collection(db, 'events'), {
+                    userId: employeeId,
+                    description: description,
+                    points: points,
+                    timestamp: serverTimestamp(),
+                    submittedBy: currentUser.uid,
+                    submittedByName: currentUserData.name
+                });
+
+                alert('獎懲事件已成功登錄！分數將由系統自動更新。');
+                addEventModal.classList.add('hidden');
+                addEventForm.reset();
+
+            } catch (error) {
+                console.error("Error adding event: ", error);
+                alert(`登錄失敗: ${error.message}`);
+            }
+        });
+        
+        // --- Utility Functions ---
+        function cleanupListeners() {
+            unsubscribeListeners.forEach(unsubscribe => unsubscribe());
+            unsubscribeListeners = [];
+        }
+
     </script>
 </body>
 </html>
