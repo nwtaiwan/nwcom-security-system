@@ -98,6 +98,11 @@
           }
         }
         */
+        //
+        // --- 3. Firestore Index (索引) ---
+        // 為了支援按建立時間排序，您可能需要在 Firestore 建立索引。
+        // 如果您在瀏覽器的開發者工具 Console 中看到 'failed-precondition' 錯誤，
+        // 錯誤訊息中會包含一個直接建立索引的連結，點擊該連結即可自動完成設定。
         // =====================================================================================
 
         // --- Firebase SDK 匯入 ---
@@ -105,7 +110,6 @@
         import {
             getAuth,
             onAuthStateChanged,
-            createUserWithEmailAndPassword,
             signInWithEmailAndPassword,
             signOut
         } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -469,8 +473,8 @@
                                 <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                      <div><label class="block text-sm font-medium">姓名*</label><input type="text" id="name" required class="w-full mt-1 p-2 border rounded-md" value="${user?.name || ''}"></div>
                                      <div><label class="block text-sm font-medium">員工編號</label><input type="text" id="employeeId" class="w-full mt-1 p-2 border rounded-md" value="${user?.employeeId || ''}"></div>
+                                     <div><label class="block text-sm font-medium">登入帳號*</label><input type="text" id="username" ${isEditMode ? 'disabled' : 'required'} class="w-full mt-1 p-2 border rounded-md ${isEditMode ? 'bg-gray-100' : ''}" value="${user?.username || ''}"></div>
                                      <div><label class="block text-sm font-medium">Email*</label><input type="email" id="email" ${isEditMode ? 'disabled' : 'required'} class="w-full mt-1 p-2 border rounded-md ${isEditMode ? 'bg-gray-100' : ''}" value="${user?.email || ''}"></div>
-                                     <div><label class="block text-sm font-medium">密碼*</label><input type="password" id="password" ${isEditMode ? '' : 'required'} class="w-full mt-1 p-2 border rounded-md" placeholder="${isEditMode ? '留空則不修改' : ''}"></div>
                                 </div>
                             </div>
                             <hr>
@@ -538,18 +542,9 @@
 
             const userId = form.querySelector('#userId').value;
             const isEditMode = !!userId;
-            const password = form.querySelector('#password').value;
-
-            if (!isEditMode && !password) {
-                alert('新增使用者時，必須設定密碼。');
-                submitButton.disabled = false;
-                submitButton.textContent = '儲存';
-                return;
-            }
 
             const userData = {
                 name: form.querySelector('#name').value,
-                email: form.querySelector('#email').value,
                 employeeId: form.querySelector('#employeeId').value,
                 role: form.querySelector('#role').value,
                 phoneNumber: form.querySelector('#phoneNumber').value,
@@ -560,21 +555,37 @@
                 remarks: form.querySelector('#remarks').value,
             };
 
+            // 僅在「新增」模式下處理 Email、帳號和建立時間
+            if (!isEditMode) {
+                userData.email = form.querySelector('#email').value;
+                userData.username = form.querySelector('#username').value;
+                userData.createdAt = serverTimestamp();
+            }
+
             try {
-                let finalUserId = userId;
+                let userDocId = userId;
+
+                // 新增模式
                 if (!isEditMode) {
-                    const userCredential = await createUserWithEmailAndPassword(auth, userData.email, password);
-                    finalUserId = userCredential.user.uid;
+                    const docRef = await addDoc(collection(db, `apps/${appId}/users`), userData);
+                    userDocId = docRef.id;
                 }
 
+                // 處理大頭照上傳 (新增與編輯共用)
                 const photoFile = form.querySelector('#photo').files[0];
                 if (photoFile) {
-                    const storageRef = ref(storage, `profile_pictures/${finalUserId}/${Date.now()}_${photoFile.name}`);
+                    const storageRef = ref(storage, `profile_pictures/${userDocId}/${Date.now()}_${photoFile.name}`);
                     const snapshot = await uploadBytes(storageRef, photoFile);
                     userData.photoURL = await getDownloadURL(snapshot.ref);
                 }
 
-                await setDoc(doc(db, `apps/${appId}/users`, finalUserId), userData, { merge: true });
+                // 編輯模式 (或為新用戶更新大頭照URL)
+                await setDoc(doc(db, `apps/${appId}/users`, userDocId), userData, { merge: true });
+
+                if (!isEditMode) {
+                    alert('員工資料已成功建立。\n\n請務必前往 Firebase Authentication 頁面，為此員工建立對應的登入帳號 (使用相同的 Email)，才能讓他們順利登入。');
+                }
+
                 closeModal();
                 await renderContent('userManagement');
             } catch (error) {
@@ -591,7 +602,7 @@
                 alert("沒有可匯出的資料。");
                 return;
             }
-            const headers = ['姓名', '員工編號', 'Email', '角色', '手機號碼', '身分證號', '出生年月日', '服務社區', '相關證照', '備註', '大頭照URL'];
+            const headers = ['姓名', '員工編號', 'Email', '角色', '手機號碼', '身分證號', '出生年月日', '服務社區', '相關證照', '備註', '大頭照URL', '登入帳號'];
             const rows = state.users.map(user => [
                 user.name || '',
                 user.employeeId || '',
@@ -603,7 +614,8 @@
                 user.serviceCommunity || '',
                 `"${(user.certifications || '').replace(/"/g, '""')}"`,
                 `"${(user.remarks || '').replace(/"/g, '""')}"`,
-                user.photoURL || ''
+                user.photoURL || '',
+                user.username || ''
             ].join(','));
 
             const csvContent = "\uFEFF" + [headers.join(','), ...rows].join('\n');
@@ -648,10 +660,16 @@
         // --- 資料獲取函式 ---
         async function fetchAllUsers() {
             try {
-                const q = query(collection(db, `apps/${appId}/users`), orderBy('name'));
+                const usersCollectionRef = collection(db, `apps/${appId}/users`);
+                const q = query(usersCollectionRef, orderBy('createdAt', 'desc'));
                 const querySnapshot = await getDocs(q);
                 state.users = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (error) { console.error("獲取使用者列表失敗:", error); }
+            } catch (error) { 
+                console.error("獲取使用者列表失敗:", error);
+                if (error.code === 'failed-precondition') {
+                    alert("資料庫需要建立索引來支援排序，請按 F12 打開開發者工具，並點擊 Console 中的連結來自動建立索引。");
+                }
+            }
         }
         async function fetchSchedules() { state.schedules = []; }
         async function fetchRecords() { state.records = []; }
